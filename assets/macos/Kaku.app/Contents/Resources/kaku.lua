@@ -291,7 +291,12 @@ config.colors = {
 }
 
 -- ===== Shell =====
-config.default_prog = { '/bin/zsh', '-l' }
+local user_shell = os.getenv('SHELL')
+if user_shell and #user_shell > 0 then
+  config.default_prog = { user_shell, '-l' }
+else
+  config.default_prog = { '/bin/zsh', '-l' }
+end
 
 -- ===== macOS Specific =====
 -- Keep Left Option as Meta so Alt-based Vim/Neovim keybindings work reliably.

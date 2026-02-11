@@ -27,6 +27,42 @@ fi
 
 SETUP_SCRIPT="$RESOURCES_DIR/setup_zsh.sh"
 
+detect_login_shell() {
+	if [[ -n "${SHELL:-}" && -x "${SHELL:-}" ]]; then
+		printf '%s\n' "$SHELL"
+		return
+	fi
+
+	local current_user resolved_shell passwd_entry
+	current_user="${USER:-}"
+	if [[ -z "$current_user" ]]; then
+		current_user="$(id -un 2>/dev/null || true)"
+	fi
+
+	if [[ -n "$current_user" ]] && command -v dscl &>/dev/null; then
+		resolved_shell="$(dscl . -read "/Users/$current_user" UserShell 2>/dev/null | awk '/UserShell:/ { print $2 }')"
+		if [[ -n "$resolved_shell" && -x "$resolved_shell" ]]; then
+			printf '%s\n' "$resolved_shell"
+			return
+		fi
+	fi
+
+	if [[ -n "$current_user" ]] && command -v getent &>/dev/null; then
+		passwd_entry="$(getent passwd "$current_user" 2>/dev/null || true)"
+		resolved_shell="${passwd_entry##*:}"
+		if [[ -n "$resolved_shell" && -x "$resolved_shell" ]]; then
+			printf '%s\n' "$resolved_shell"
+			return
+		fi
+	fi
+
+	if [[ -x "/bin/zsh" ]]; then
+		printf '%s\n' "/bin/zsh"
+	else
+		printf '%s\n' "/bin/sh"
+	fi
+}
+
 # Clear screen
 clear
 
@@ -217,5 +253,6 @@ echo -e "\n\033[1;32m❤️ Kaku environment is ready! Enjoy coding.\033[0m"
 # Persist explicitly here so successful first-run/upgrade paths are recorded.
 persist_config_version
 
-# Replace current process with zsh to enter the shell
-exec /bin/zsh -l
+# Replace current process with the user's login shell
+TARGET_SHELL="$(detect_login_shell)"
+exec "$TARGET_SHELL" -l
