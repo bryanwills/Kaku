@@ -627,6 +627,18 @@ fn run_terminal_gui(opts: StartCommand, default_domain_name: Option<String>) -> 
     }
 
     let config = config::configuration();
+
+    // Prewarm the built-in font FreeType cache in a background thread so that
+    // FontConfiguration::new() in new_window() hits the static cache instead of
+    // blocking the async startup path.  Safe to call concurrently: the cache is
+    // a Mutex<Option<...>> and FontDatabase::with_built_in() is idempotent.
+    std::thread::Builder::new()
+        .name("font-prewarm".into())
+        .spawn(|| {
+            let _ = wezterm_font::db::FontDatabase::with_built_in();
+        })
+        .ok();
+
     let need_builder = !opts.prog.is_empty() || opts.cwd.is_some();
 
     let cmd = if need_builder {

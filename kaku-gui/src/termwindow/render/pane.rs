@@ -132,7 +132,8 @@ impl crate::TermWindow {
                 )
             } else {
                 (
-                    top_pixel_y + (pos.top as f32 * cell_height) - (cell_height * split_row_gutter / 2.0),
+                    top_pixel_y + (pos.top as f32 * cell_height)
+                        - (cell_height * split_row_gutter / 2.0),
                     cell_height * split_row_gutter,
                 )
             };
@@ -661,7 +662,8 @@ impl crate::TermWindow {
             )
         } else {
             (
-                top_pixel_y + (pos.top as f32 * cell_height) - (cell_height * split_row_gutter / 2.0),
+                top_pixel_y + (pos.top as f32 * cell_height)
+                    - (cell_height * split_row_gutter / 2.0),
                 cell_height * split_row_gutter,
             )
         };

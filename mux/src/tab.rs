@@ -340,8 +340,12 @@ fn compute_min_size(tree: &mut Tree) -> (usize, usize) {
             let (left_x, left_y) = compute_min_size(&mut *left);
             let (right_x, right_y) = compute_min_size(&mut *right);
             match data.direction {
-                SplitDirection::Vertical => (left_x.max(right_x), left_y + right_y + split_row_gutter()),
-                SplitDirection::Horizontal => (left_x + right_x + split_col_gutter(), left_y.max(right_y)),
+                SplitDirection::Vertical => {
+                    (left_x.max(right_x), left_y + right_y + split_row_gutter())
+                }
+                SplitDirection::Horizontal => {
+                    (left_x + right_x + split_col_gutter(), left_y.max(right_y))
+                }
             }
         }
         Tree::Leaf(_) => (1, 1),
@@ -1138,8 +1142,12 @@ impl TabInner {
                 }
                 if let Ok(Some(node)) = cursor.node_mut() {
                     match node.direction {
-                        SplitDirection::Horizontal => left += node.first.cols as usize + split_col_gutter() / 2,
-                        SplitDirection::Vertical => top += node.first.rows as usize + split_row_gutter() / 2,
+                        SplitDirection::Horizontal => {
+                            left += node.first.cols as usize + split_col_gutter() / 2
+                        }
+                        SplitDirection::Vertical => {
+                            top += node.first.rows as usize + split_row_gutter() / 2
+                        }
                     }
 
                     dividers.push(PositionedSplit {
@@ -1237,12 +1245,16 @@ impl TabInner {
                 node.first.rows = pane_size.rows;
                 node.second.rows = pane_size.rows;
 
-                node.second.cols = pane_size.cols.saturating_sub(split_col_gutter() + node.first.cols);
+                node.second.cols = pane_size
+                    .cols
+                    .saturating_sub(split_col_gutter() + node.first.cols);
             } else {
                 node.first.cols = pane_size.cols;
                 node.second.cols = pane_size.cols;
 
-                node.second.rows = pane_size.rows.saturating_sub(split_row_gutter() + node.first.rows);
+                node.second.rows = pane_size
+                    .rows
+                    .saturating_sub(split_row_gutter() + node.first.rows);
             }
             node.first.pixel_width = node.first.cols * cell_width;
             node.first.pixel_height = node.first.rows * cell_height;
@@ -1373,7 +1385,8 @@ impl TabInner {
                     node.first.pixel_width =
                         node.first.cols.saturating_mul(cell_dimensions.pixel_width);
 
-                    node.second.cols = width.saturating_sub(node.first.cols.saturating_add(split_col_gutter()));
+                    node.second.cols =
+                        width.saturating_sub(node.first.cols.saturating_add(split_col_gutter()));
                     node.second.pixel_width =
                         node.second.cols.saturating_mul(cell_dimensions.pixel_width);
                 }
@@ -1389,7 +1402,8 @@ impl TabInner {
                     node.first.pixel_height =
                         node.first.rows.saturating_mul(cell_dimensions.pixel_height);
 
-                    node.second.rows = height.saturating_sub(node.first.rows.saturating_add(split_row_gutter()));
+                    node.second.rows =
+                        height.saturating_sub(node.first.rows.saturating_add(split_row_gutter()));
                     node.second.pixel_height = node
                         .second
                         .rows
@@ -2037,9 +2051,10 @@ impl TabInner {
                     split_dimension(pos.width, request, split_col_gutter()),
                     (pos.height, pos.height),
                 ),
-                SplitDirection::Vertical => {
-                    ((pos.width, pos.width), split_dimension(pos.height, request, split_row_gutter()))
-                }
+                SplitDirection::Vertical => (
+                    (pos.width, pos.width),
+                    split_dimension(pos.height, request, split_row_gutter()),
+                ),
             };
 
             SplitDirectionAndSize {

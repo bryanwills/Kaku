@@ -297,29 +297,29 @@ impl super::TermWindow {
                 self.current_mouse_capture = Some(MouseCapture::UI);
             }
             self.mouse_event_ui_item(item, pane, y, event, context);
-        } else if matches!(event.kind, WMEK::Press(MousePress::Left))
-            && event.coords.y < terminal_origin_y
-        {
-            // Click landed above terminal content (title/tab/padding area)
-            // but missed every UIItem. Treat it as a window drag start so
-            // the event never reaches the terminal.
-            let maximized = self
-                .window_state
-                .intersects(WindowState::MAXIMIZED | WindowState::FULL_SCREEN);
-            self.current_mouse_capture = Some(MouseCapture::UI);
-            self.is_window_dragging = true;
-            if !maximized && !cfg!(target_os = "macos") {
-                self.window_drag_position.replace(event.clone());
+        } else if event.coords.y < terminal_origin_y {
+            // Event landed in title/padding area above terminal content but missed all UI items.
+            match event.kind {
+                WMEK::Press(MousePress::Left) => {
+                    // Treat left-click as window drag start.
+                    let maximized = self
+                        .window_state
+                        .intersects(WindowState::MAXIMIZED | WindowState::FULL_SCREEN);
+                    self.current_mouse_capture = Some(MouseCapture::UI);
+                    self.is_window_dragging = true;
+                    if !maximized && !cfg!(target_os = "macos") {
+                        self.window_drag_position.replace(event.clone());
+                    }
+                    context.request_drag_move();
+                    return;
+                }
+                WMEK::Move if self.current_mouse_capture.is_none() => {
+                    // Set Arrow cursor for move events when no capture is active.
+                    // Prevents macOS NSTextInputClient from defaulting to IBeam.
+                    context.set_cursor(Some(MouseCursor::Arrow));
+                }
+                _ => {}
             }
-            context.request_drag_move();
-            return;
-        } else if event.coords.y < terminal_origin_y
-            && self.current_mouse_capture.is_none()
-        {
-            // Mouse is above terminal content (title/padding area) with no UI
-            // item hit and no active capture. Explicitly set Arrow cursor so
-            // macOS does not fall back to the NSTextInputClient default IBeam.
-            context.set_cursor(Some(MouseCursor::Arrow));
         } else if matches!(
             self.current_mouse_capture,
             None | Some(MouseCapture::TerminalPane(_))
