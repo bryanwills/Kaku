@@ -2269,18 +2269,110 @@ fn key_modifiers(flags: NSEventModifierFlags) -> Modifiers {
     mods
 }
 
+fn is_function_virtual_key(vkey: u16) -> bool {
+    [
+        kVK_F1, kVK_F2, kVK_F3, kVK_F4, kVK_F5, kVK_F6, kVK_F7, kVK_F8, kVK_F9, kVK_F10,
+        kVK_F11, kVK_F12, kVK_F13, kVK_F14, kVK_F15, kVK_F16, kVK_F17, kVK_F18, kVK_F19,
+        kVK_F20,
+    ]
+    .contains(&vkey)
+}
+
+fn is_navigation_virtual_key(vkey: u16) -> bool {
+    [
+        kVK_LeftArrow,
+        kVK_RightArrow,
+        kVK_UpArrow,
+        kVK_DownArrow,
+        kVK_Home,
+        kVK_End,
+        kVK_PageUp,
+        kVK_PageDown,
+        kVK_ForwardDelete,
+        kVK_Help,
+    ]
+    .contains(&vkey)
+}
+
 /// Returns true for virtual key codes that never correspond to macOS menu
 /// shortcuts: arrows, navigation keys (Home/End/PageUp/PageDown/Delete/Help),
-/// and function keys (F1-F20). Safe to intercept in performKeyEquivalent:
+/// and function keys (F1-F20). Safe to intercept in performKeyEquivalent
 /// when Command is held without breaking standard menu items.
 fn is_non_menu_virtual_key(vkey: u16) -> bool {
-    // 0x60..=0x7E covers F1-F16, arrows, and navigation keys.
-    // F17-F20 are the remaining non-character function keys.
-    (0x60..=0x7E).contains(&vkey)
-        || vkey == kVK_F17
-        || vkey == kVK_F18
-        || vkey == kVK_F19
-        || vkey == kVK_F20
+    is_navigation_virtual_key(vkey) || is_function_virtual_key(vkey)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_menu_virtual_keys_are_recognized() {
+        let keys = [
+            kVK_LeftArrow,
+            kVK_RightArrow,
+            kVK_UpArrow,
+            kVK_DownArrow,
+            kVK_Home,
+            kVK_End,
+            kVK_PageUp,
+            kVK_PageDown,
+            kVK_ForwardDelete,
+            kVK_Help,
+            kVK_F1,
+            kVK_F2,
+            kVK_F3,
+            kVK_F4,
+            kVK_F5,
+            kVK_F6,
+            kVK_F7,
+            kVK_F8,
+            kVK_F9,
+            kVK_F10,
+            kVK_F11,
+            kVK_F12,
+            kVK_F13,
+            kVK_F14,
+            kVK_F15,
+            kVK_F16,
+            kVK_F17,
+            kVK_F18,
+            kVK_F19,
+            kVK_F20,
+        ];
+
+        for &key in &keys {
+            assert!(
+                is_non_menu_virtual_key(key),
+                "vkey {:#x} must be recognized",
+                key
+            );
+        }
+    }
+
+    #[test]
+    fn menu_or_character_virtual_keys_are_not_recognized() {
+        let keys = [
+            kVK_ANSI_A,
+            kVK_ANSI_Grave,
+            kVK_Tab,
+            kVK_Return,
+            kVK_Escape,
+            kVK_Command,
+            kVK_Option,
+            // JIS Eisu/Kana key positions should not be captured by default.
+            0x66,
+            0x68,
+        ];
+
+        for &key in &keys {
+            assert!(
+                !is_non_menu_virtual_key(key),
+                "vkey {:#x} must not be recognized",
+                key
+            );
+        }
+    }
 }
 
 /// We register our own subclass of NSWindow so that we can override
