@@ -362,21 +362,11 @@ impl crate::TermWindow {
         let h_margin = metrics.cell_size.width as f32 * 2.0;
         let v_margin = metrics.cell_size.height as f32 * 1.5;
 
-        // Calculate bottom bar height (tab bar or status bar at bottom)
-        let bottom_bar_height = if self.show_tab_bar && self.config.tab_bar_at_bottom {
-            self.tab_bar_pixel_height().unwrap_or(0.)
-        } else {
-            0.
-        };
-
-        // Position at bottom-right, above the tab bar if present
+        // Position at bottom-right with fixed margin from window edge
         let right_x =
             dimensions.pixel_width as f32 - approx_width - h_margin - border.right.get() as f32;
-        let bottom_y = dimensions.pixel_height as f32
-            - toast_height
-            - v_margin
-            - bottom_bar_height
-            - border.bottom.get() as f32;
+        let bottom_y =
+            dimensions.pixel_height as f32 - toast_height - v_margin - border.bottom.get() as f32;
 
         let computed = self.compute_element(
             &LayoutContext {
