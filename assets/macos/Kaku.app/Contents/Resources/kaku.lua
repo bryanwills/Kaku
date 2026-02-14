@@ -281,8 +281,8 @@ config.hide_tab_bar_if_only_one_tab = true
 config.show_tab_index_in_tab_bar = true
 config.show_new_tab_button_in_tab_bar = false
 
--- Color scheme for tabs
-config.colors = {
+-- ===== Color Scheme =====
+local kaku_theme = {
   -- Background
   foreground = '#edecee',
   background = '#15141b',
@@ -360,6 +360,12 @@ config.colors = {
     },
   },
 }
+
+config.color_schemes = config.color_schemes or {}
+config.color_schemes['Kaku Theme'] = kaku_theme
+if not config.color_scheme then
+  config.color_scheme = 'Kaku Theme'
+end
 
 -- ===== Shell =====
 local user_shell = os.getenv('SHELL')
