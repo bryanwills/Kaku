@@ -3409,8 +3409,9 @@ impl TermWindow {
             InputSelector(args) => self.show_input_selector(args),
             Confirmation(args) => self.show_confirmation(args),
             SetPaneEncoding(encoding) => {
+                let encoding: PaneEncoding = *encoding;
+                PaneEncoding::set_last_selected(encoding);
                 if let Some(pane) = self.get_active_pane_no_overlay() {
-                    let encoding: PaneEncoding = *encoding;
                     pane.set_encoding(encoding);
                 }
             }

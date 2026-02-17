@@ -174,6 +174,15 @@ impl LauncherArgs {
 
 const ROW_OVERHEAD: usize = 3;
 
+struct ParentLauncherState {
+    entries: Vec<Entry>,
+    active_idx: usize,
+    top_row: usize,
+    help_text: String,
+    filter_term: String,
+    filtering: bool,
+}
+
 struct LauncherState {
     active_idx: usize,
     max_items: usize,
@@ -190,7 +199,7 @@ struct LauncherState {
     alphabet: String,
     selection: String,
     always_fuzzy: bool,
-    back_action: Option<KeyAssignment>,
+    parent_state: Option<ParentLauncherState>,
 }
 
 impl LauncherState {
@@ -232,6 +241,22 @@ impl LauncherState {
 
     fn build_entries(&mut self, args: LauncherArgs) {
         let config = configuration();
+
+        // Add a single "Pane Encoding" submenu entry as the very first item
+        // Only when NOT already viewing the encoding submenu
+        if !args.flags.contains(LauncherFlags::PANE_ENCODINGS) {
+            self.entries.push(Entry {
+                label: "Pane Encoding".to_string(),
+                action: KeyAssignment::ShowLauncherArgs(LauncherActionArgs {
+                    flags: LauncherFlags::PANE_ENCODINGS,
+                    title: Some("Pane Encoding".to_string()),
+                    help_text: None,
+                    fuzzy_help_text: None,
+                    alphabet: None,
+                }),
+            });
+        }
+
         // Pull in the user defined entries from the launch_menu
         // section of the configuration.
         if args.flags.contains(LauncherFlags::LAUNCH_MENU_ITEMS) {
@@ -322,7 +347,9 @@ impl LauncherState {
             for cmd in commands {
                 if matches!(
                     &cmd.action,
-                    KeyAssignment::ActivateTabRelative(_) | KeyAssignment::ActivateTab(_)
+                    KeyAssignment::ActivateTabRelative(_)
+                        | KeyAssignment::ActivateTab(_)
+                        | KeyAssignment::SetPaneEncoding(_)
                 ) {
                     // Filter out some noisy, repetitive entries
                     continue;
@@ -487,18 +514,23 @@ impl LauncherState {
         term.render(&changes)
     }
 
-    fn launch(&self, active_idx: usize) -> bool {
-        if let Some(entry) = self.filtered_entries.get(active_idx) {
-            let assignment = entry.action.clone();
-            self.window.notify(TermWindowNotif::PerformAssignment {
-                pane_id: self.pane_id,
-                assignment,
-                tx: None,
-            });
-            true
-        } else {
-            false
+    fn launch(&mut self, active_idx: usize) -> bool {
+        let action = match self.filtered_entries.get(active_idx) {
+            Some(entry) => entry.action.clone(),
+            None => return false,
+        };
+        if let KeyAssignment::ShowLauncherArgs(ref args) = action {
+            if args.flags.contains(LauncherFlags::PANE_ENCODINGS) {
+                self.enter_encoding_submenu();
+                return false;
+            }
         }
+        self.window.notify(TermWindowNotif::PerformAssignment {
+            pane_id: self.pane_id,
+            assignment: action,
+            tx: None,
+        });
+        true
     }
 
     fn move_up(&mut self) {
@@ -515,13 +547,42 @@ impl LauncherState {
         }
     }
 
-    fn back(&self) -> bool {
-        if let Some(assignment) = self.back_action.clone() {
-            self.window.notify(TermWindowNotif::PerformAssignment {
-                pane_id: self.pane_id,
-                assignment,
-                tx: None,
+    fn enter_encoding_submenu(&mut self) {
+        let parent = ParentLauncherState {
+            entries: std::mem::take(&mut self.entries),
+            active_idx: self.active_idx,
+            top_row: self.top_row,
+            help_text: self.help_text.clone(),
+            filter_term: std::mem::take(&mut self.filter_term),
+            filtering: self.filtering,
+        };
+        self.parent_state = Some(parent);
+        self.entries.clear();
+        for encoding in PaneEncoding::ordered_list() {
+            self.entries.push(Entry {
+                label: format!("Set pane encoding to {encoding}"),
+                action: SetPaneEncoding(encoding),
             });
+        }
+        self.help_text =
+            "Select encoding  |  Enter = set  |  Esc = back  |  / = filter".to_string();
+        self.active_idx = 0;
+        self.top_row = 0;
+        self.filtering = false;
+        self.selection.clear();
+        self.update_filter();
+    }
+
+    fn exit_submenu(&mut self) -> bool {
+        if let Some(parent) = self.parent_state.take() {
+            self.entries = parent.entries;
+            self.active_idx = parent.active_idx;
+            self.top_row = parent.top_row;
+            self.help_text = parent.help_text;
+            self.filter_term = parent.filter_term;
+            self.filtering = parent.filtering;
+            self.selection.clear();
+            self.update_filter();
             true
         } else {
             false
@@ -597,8 +658,9 @@ impl LauncherState {
                     key: KeyCode::Escape,
                     ..
                 }) => {
-                    self.back();
-                    break;
+                    if !self.exit_submenu() {
+                        break;
+                    }
                 }
                 InputEvent::Key(KeyEvent {
                     key: KeyCode::Char(c),
@@ -678,19 +740,6 @@ pub fn launcher(
     initial_choice_idx: usize,
 ) -> anyhow::Result<()> {
     let filtering = args.flags.contains(LauncherFlags::FUZZY);
-    let mut submenu_flags = args.flags;
-    submenu_flags.remove(LauncherFlags::FUZZY);
-    let back_action = if submenu_flags == LauncherFlags::PANE_ENCODINGS {
-        Some(KeyAssignment::ShowLauncherArgs(LauncherActionArgs {
-            flags: LauncherFlags::COMMANDS,
-            title: Some("Pane Actions".to_string()),
-            help_text: None,
-            fuzzy_help_text: None,
-            alphabet: None,
-        }))
-    } else {
-        None
-    };
     let mut state = LauncherState {
         active_idx: initial_choice_idx,
         max_items: 0,
@@ -707,7 +756,7 @@ pub fn launcher(
         selection: String::new(),
         alphabet: args.alphabet.clone(),
         always_fuzzy: filtering,
-        back_action,
+        parent_state: None,
     };
 
     term.set_raw_mode()?;
