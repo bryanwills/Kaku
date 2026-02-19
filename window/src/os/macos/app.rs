@@ -15,6 +15,7 @@ use objc::rc::StrongPtr;
 use objc::runtime::{Class, Object, Sel, BOOL, NO, YES};
 use objc::*;
 use std::cell::RefCell;
+use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use url::Url;
@@ -32,6 +33,32 @@ lazy_static::lazy_static! {
 // macOS can emit applicationOpenUntitledFile twice while no window has
 // materialized yet; keep a wider debounce to avoid duplicate SpawnWindow work.
 const OPEN_UNTITLED_SPAWN_DEBOUNCE: Duration = Duration::from_millis(1200);
+
+fn reap_kaku_autofill_helpers() {
+    // Best-effort cleanup for macOS helper leaks where AutoFill (Kaku)
+    // can accumulate across app restarts.
+    const SCRIPT: &str = r#"
+for pid in $(pgrep -f 'SafariPlatformSupport.Helper|CredentialProviderExtensionHelper' 2>/dev/null); do
+  name=$(lsappinfo info -only name -pid "$pid" 2>/dev/null | sed -n 's/.*"LSDisplayName"="\([^"]*\)".*/\1/p')
+  case "$name" in
+    *"(Kaku)"*) kill "$pid" 2>/dev/null || true ;;
+  esac
+done
+"#;
+
+    match Command::new("/bin/sh").arg("-c").arg(SCRIPT).status() {
+        Ok(status) if status.success() => {}
+        Ok(status) => {
+            log::debug!(
+                "reap_kaku_autofill_helpers exited with status {}",
+                status
+            );
+        }
+        Err(err) => {
+            log::warn!("reap_kaku_autofill_helpers failed: {err:#}");
+        }
+    }
+}
 
 extern "C" fn application_should_terminate(
     _self: &mut Object,
@@ -84,6 +111,7 @@ fn terminate_now() -> u64 {
     // stops. This is the reliable save path for Cmd+Q; window_will_close
     // may not fire for every window before the process exits.
     super::window::on_app_terminating();
+    reap_kaku_autofill_helpers();
     if let Some(conn) = Connection::get() {
         conn.terminate_message_loop();
     }
@@ -96,6 +124,7 @@ extern "C" fn application_will_finish_launching(
     _notif: *mut Object,
 ) {
     log::debug!("application_will_finish_launching");
+    reap_kaku_autofill_helpers();
 }
 
 extern "C" fn application_did_finish_launching(this: &mut Object, _sel: Sel, _notif: *mut Object) {
