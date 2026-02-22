@@ -863,12 +863,8 @@ impl Modal for CommandPalette {
         let content_y = top_bar_height + padding_top + border.top.get() as f32;
         let cell_width = term_window.render_metrics.cell_size.width as f32;
         let cell_height = term_window.render_metrics.cell_size.height as f32;
-        let abs_x = content_x
-            + event.x as f32 * cell_width
-            + event.x_pixel_offset as f32;
-        let abs_y = content_y
-            + event.y as f32 * cell_height
-            + event.y_pixel_offset as f32;
+        let abs_x = content_x + event.x as f32 * cell_width + event.x_pixel_offset as f32;
+        let abs_y = content_y + event.y as f32 * cell_height + event.y_pixel_offset as f32;
 
         match event.button {
             wezterm_term::MouseButton::WheelUp(lines) => {
