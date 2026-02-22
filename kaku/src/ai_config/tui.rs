@@ -1,3 +1,4 @@
+use crate::utils::strip_jsonc_comments;
 use anyhow::Context;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -37,7 +38,13 @@ impl Tool {
             Tool::Codex => home.join(".codex").join("config.toml"),
             Tool::Gemini => home.join(".gemini").join("settings.json"),
             Tool::Copilot => home.join(".copilot").join("config.json"),
-            Tool::OpenCode => home.join(".config").join("opencode").join("opencode.json"),
+            Tool::OpenCode => {
+                let jsonc_path = home.join(".config").join("opencode").join("opencode.jsonc");
+                if jsonc_path.exists() {
+                    return jsonc_path;
+                }
+                home.join(".config").join("opencode").join("opencode.json")
+            }
             Tool::OpenClaw => {
                 let new_path = home.join(".openclaw").join("openclaw.json");
                 if new_path.exists() {
@@ -161,62 +168,6 @@ impl ToolState {
             fields,
         }
     }
-}
-
-fn strip_jsonc_comments(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-    let mut in_string = false;
-
-    while let Some(c) = chars.next() {
-        if in_string {
-            out.push(c);
-            if c == '\\' {
-                if let Some(&next) = chars.peek() {
-                    out.push(next);
-                    chars.next();
-                }
-            } else if c == '"' {
-                in_string = false;
-            }
-            continue;
-        }
-
-        if c == '"' {
-            in_string = true;
-            out.push(c);
-            continue;
-        }
-
-        if c == '/' {
-            if let Some(&next) = chars.peek() {
-                if next == '/' {
-                    for ch in chars.by_ref() {
-                        if ch == '\n' {
-                            out.push('\n');
-                            break;
-                        }
-                    }
-                    continue;
-                }
-                if next == '*' {
-                    chars.next();
-                    while let Some(ch) = chars.next() {
-                        if ch == '*' {
-                            if chars.peek() == Some(&'/') {
-                                chars.next();
-                                break;
-                            }
-                        }
-                    }
-                    continue;
-                }
-            }
-        }
-
-        out.push(c);
-    }
-    out
 }
 
 fn json_str(val: &serde_json::Value, key: &str) -> String {

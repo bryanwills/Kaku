@@ -30,6 +30,7 @@ mod imp {
 #[cfg(target_os = "macos")]
 mod imp {
     use super::*;
+    use crate::utils::strip_jsonc_comments;
     use std::os::unix::fs::PermissionsExt;
 
     pub fn run(update_only: bool) -> anyhow::Result<()> {
@@ -225,10 +226,19 @@ exit 127
 
     fn maybe_setup_opencode_config() -> anyhow::Result<()> {
         let opencode_dir = config::HOME_DIR.join(".config").join("opencode");
-        let opencode_config = opencode_dir.join("opencode.json");
+        let opencode_json = opencode_dir.join("opencode.json");
+        let opencode_jsonc = opencode_dir.join("opencode.jsonc");
         let themes_dir = opencode_dir.join("themes");
 
-        if opencode_config.exists() {
+        let opencode_config = if opencode_jsonc.exists() {
+            Some(opencode_jsonc.clone())
+        } else if opencode_json.exists() {
+            Some(opencode_json.clone())
+        } else {
+            None
+        };
+
+        if opencode_config.is_some() {
             if !prompt_yes_no("OpenCode config already exists. Overwrite with Kaku theme?") {
                 return Ok(());
             }
@@ -245,11 +255,14 @@ exit 127
         let theme_file = themes_dir.join("wezterm-match.json");
         std::fs::write(&theme_file, theme_content).context("write opencode theme file")?;
 
-        let config_content = if opencode_config.exists() {
+        let target_config = opencode_config.unwrap_or(opencode_json);
+
+        let config_content = if target_config.exists() {
             let existing =
-                std::fs::read_to_string(&opencode_config).context("read opencode config file")?;
-            let mut json: serde_json::Value =
-                serde_json::from_str(&existing).unwrap_or_else(|_| serde_json::json!({}));
+                std::fs::read_to_string(&target_config).context("read opencode config file")?;
+            let mut json: serde_json::Value = serde_json::from_str(&existing)
+                .or_else(|_| serde_json::from_str(&strip_jsonc_comments(&existing)))
+                .unwrap_or_else(|_| serde_json::json!({}));
             if let Some(obj) = json.as_object_mut() {
                 obj.insert(
                     "theme".to_string(),
@@ -264,8 +277,9 @@ exit 127
             .to_string()
         };
 
-        std::fs::write(&opencode_config, config_content).context("write opencode config file")?;
+        std::fs::write(&target_config, config_content).context("write opencode config file")?;
         println!("OpenCode theme configured successfully.");
         Ok(())
     }
+
 }

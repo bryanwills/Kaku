@@ -25,6 +25,7 @@ mod config_cmd;
 mod init;
 mod reset;
 mod update;
+mod utils;
 
 #[derive(Debug, Parser)]
 #[command(
