@@ -1,4 +1,4 @@
-use crate::utils::strip_jsonc_comments;
+use crate::utils::{is_jsonc_path, parse_json_or_jsonc, write_atomic};
 use anyhow::Context;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -122,13 +122,7 @@ impl ToolState {
 
         let fields = match tool {
             Tool::ClaudeCode => {
-                let parsed: serde_json::Value = match serde_json::from_str(&raw) {
-                    Ok(v) => v,
-                    Err(_) => {
-                        let stripped = strip_jsonc_comments(&raw);
-                        serde_json::from_str(&stripped).unwrap_or_default()
-                    }
-                };
+                let parsed: serde_json::Value = parse_json_or_jsonc(&raw).unwrap_or_default();
                 extract_claude_code_fields(&parsed)
             }
             Tool::Codex => extract_codex_fields(&raw),
@@ -141,23 +135,11 @@ impl ToolState {
                 extract_copilot_fields(&parsed)
             }
             Tool::OpenCode => {
-                let parsed: serde_json::Value = match serde_json::from_str(&raw) {
-                    Ok(v) => v,
-                    Err(_) => {
-                        let stripped = strip_jsonc_comments(&raw);
-                        serde_json::from_str(&stripped).unwrap_or_default()
-                    }
-                };
+                let parsed: serde_json::Value = parse_json_or_jsonc(&raw).unwrap_or_default();
                 extract_opencode_fields(&parsed)
             }
             Tool::OpenClaw => {
-                let parsed: serde_json::Value = match serde_json::from_str(&raw) {
-                    Ok(v) => v,
-                    Err(_) => {
-                        let stripped = strip_jsonc_comments(&raw);
-                        serde_json::from_str(&stripped).unwrap_or_default()
-                    }
-                };
+                let parsed: serde_json::Value = parse_json_or_jsonc(&raw).unwrap_or_default();
                 extract_openclaw_fields(&parsed)
             }
         };
@@ -1482,9 +1464,8 @@ fn save_field(tool: Tool, field_key: &str, new_val: &str) -> anyhow::Result<()> 
     }
 
     let raw = std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let mut parsed: serde_json::Value = serde_json::from_str(&raw)
-        .or_else(|_| serde_json::from_str(&strip_jsonc_comments(&raw)))
-        .with_context(|| format!("parse {}", path.display()))?;
+    let mut parsed: serde_json::Value =
+        parse_json_or_jsonc(&raw).with_context(|| format!("parse {}", path.display()))?;
 
     match tool {
         Tool::Gemini => {
@@ -1648,7 +1629,7 @@ fn save_field(tool: Tool, field_key: &str, new_val: &str) -> anyhow::Result<()> 
                                 // Save to auth.json
                                 let output = serde_json::to_string_pretty(&auth_parsed)
                                     .context("serialize auth.json")?;
-                                std::fs::write(&auth_path, output.as_bytes())
+                                write_atomic(&auth_path, output.as_bytes())
                                     .with_context(|| format!("write {}", auth_path.display()))?;
                             }
                         }
@@ -1781,8 +1762,13 @@ fn save_field(tool: Tool, field_key: &str, new_val: &str) -> anyhow::Result<()> 
     }
 
     let output = serde_json::to_string_pretty(&parsed).context("serialize config")?;
-    std::fs::write(&path, output.as_bytes())
-        .with_context(|| format!("write {}", path.display()))?;
+    if is_jsonc_path(&path) {
+        eprintln!(
+            "Note: {} comments will be removed when Kaku rewrites this file.",
+            path.display()
+        );
+    }
+    write_atomic(&path, output.as_bytes()).with_context(|| format!("write {}", path.display()))?;
     Ok(())
 }
 
@@ -1834,7 +1820,7 @@ fn save_codex_field_at(path: &Path, field_key: &str, new_val: &str) -> anyhow::R
     // Remove empty lines that resulted from deletion
     let output: Vec<&str> = lines.iter().map(|l| l.as_str()).collect();
     let result = output.join("\n");
-    std::fs::write(path, result.as_bytes()).with_context(|| format!("write {}", path.display()))?;
+    write_atomic(path, result.as_bytes()).with_context(|| format!("write {}", path.display()))?;
     Ok(())
 }
 
