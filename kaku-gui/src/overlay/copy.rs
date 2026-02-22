@@ -69,6 +69,7 @@ struct CopyRenderable {
     /// The text that the user entered
     pattern_type: PatternType,
     search_line: LineEditBuffer,
+    search_selection_anchor: Option<usize>,
     /// The most recently queried set of matches
     results: Vec<SearchResult>,
     by_line: HashMap<StableRowIndex, Vec<MatchResult>>,
@@ -155,6 +156,7 @@ impl CopyOverlay {
             tab_id,
             pattern_type: PatternType::from(&pattern),
             search_line,
+            search_selection_anchor: None,
             editing_search: params.editing_search,
             result_pos: None,
             selection_mode: SelectionMode::Cell,
@@ -196,6 +198,7 @@ impl CopyOverlay {
             render
                 .search_line
                 .set_line_and_cursor(&params.pattern, params.pattern.len());
+            render.search_selection_anchor = None;
             render.schedule_update_search();
         }
         let search_row = render.compute_search_row();
@@ -649,18 +652,94 @@ impl CopyRenderable {
         }
     }
 
+    fn search_selection_range(&self) -> Option<(usize, usize)> {
+        let cursor = self.search_line.get_cursor();
+        self.search_selection_anchor.and_then(|anchor| {
+            if anchor == cursor {
+                None
+            } else if anchor < cursor {
+                Some((anchor, cursor))
+            } else {
+                Some((cursor, anchor))
+            }
+        })
+    }
+
+    fn move_search_cursor(&mut self, movement: Movement, extend_selection: bool) {
+        let old_cursor = self.search_line.get_cursor();
+        self.search_line.exec_movement(movement);
+
+        if extend_selection {
+            let anchor = self.search_selection_anchor.unwrap_or(old_cursor);
+            self.search_selection_anchor = Some(anchor);
+        } else {
+            self.search_selection_anchor = None;
+        }
+    }
+
+    fn delete_search_selection(&mut self) -> bool {
+        let Some((start, end)) = self.search_selection_range() else {
+            return false;
+        };
+
+        let mut updated = self.search_line.get_line().to_string();
+        if !updated.is_char_boundary(start) || !updated.is_char_boundary(end) {
+            log::warn!(
+                "search selection delete skipped: non-char boundary start={} end={} len={}",
+                start,
+                end,
+                updated.len()
+            );
+            self.search_selection_anchor = None;
+            return false;
+        }
+        updated.replace_range(start..end, "");
+        self.search_line.set_line_and_cursor(&updated, start);
+        self.search_selection_anchor = None;
+        true
+    }
+
+    fn replace_or_insert_search_char(&mut self, c: char) {
+        let _ = self.delete_search_selection();
+        self.search_line.insert_char(c);
+        self.schedule_update_search();
+    }
+
+    fn kill_search_text(&mut self, kill_movement: Movement, move_movement: Movement) {
+        if self.delete_search_selection() {
+            self.schedule_update_search();
+            return;
+        }
+
+        self.search_selection_anchor = None;
+        self.search_line.kill_text(kill_movement, move_movement);
+        self.schedule_update_search();
+    }
+
+    fn select_search_line_all(&mut self) {
+        if self.search_line.get_line().is_empty() {
+            self.search_selection_anchor = None;
+            return;
+        }
+        self.search_selection_anchor = Some(0);
+        self.search_line.exec_movement(Movement::EndOfLine);
+    }
+
     fn clear_pattern(&mut self) {
         self.search_line.clear();
+        self.search_selection_anchor = None;
         self.update_search();
     }
 
     fn edit_pattern(&mut self) {
         self.editing_search = true;
+        self.search_selection_anchor = None;
         self.update_key_table();
     }
 
     fn accept_pattern(&mut self) {
         self.editing_search = false;
+        self.search_selection_anchor = None;
         self.update_key_table();
     }
 
@@ -1113,6 +1192,7 @@ impl Pane for CopyOverlay {
         // paste into the search bar
         let mut r = self.render.lock();
         r.search_line.insert_text(text);
+        r.search_selection_anchor = None;
         r.schedule_update_search();
         Ok(())
     }
@@ -1138,7 +1218,8 @@ impl Pane for CopyOverlay {
 
     fn key_down(&self, key: KeyCode, mods: KeyModifiers) -> anyhow::Result<()> {
         let mut render = self.render.lock();
-        let mods = mods.remove_positional_mods();
+        let mods = mods.remove_positional_mods()
+            & (KeyModifiers::SHIFT | KeyModifiers::ALT | KeyModifiers::CTRL | KeyModifiers::SUPER);
         if let Some(jump) = render.pending_jump.take() {
             match (key, mods) {
                 (KeyCode::Char(c), KeyModifiers::NONE)
@@ -1162,74 +1243,117 @@ impl Pane for CopyOverlay {
         }
 
         if render.editing_search {
+            let shift_alt = KeyModifiers::SHIFT | KeyModifiers::ALT;
+            let shift_super = KeyModifiers::SHIFT | KeyModifiers::SUPER;
             match (key, mods) {
                 (KeyCode::Char(c), KeyModifiers::NONE)
                 | (KeyCode::Char(c), KeyModifiers::SHIFT) => {
-                    // Type to add to the pattern
-                    render.search_line.insert_char(c);
-
-                    render.schedule_update_search();
+                    render.replace_or_insert_search_char(c);
                 }
                 (KeyCode::Char('H'), KeyModifiers::CTRL)
                 | (KeyCode::Backspace, KeyModifiers::NONE) => {
-                    render
-                        .search_line
-                        .kill_text(Movement::BackwardChar(1), Movement::BackwardChar(1));
-
-                    render.schedule_update_search();
+                    render.kill_search_text(Movement::BackwardChar(1), Movement::BackwardChar(1));
                 }
                 (KeyCode::Delete, KeyModifiers::NONE) => {
-                    render
-                        .search_line
-                        .kill_text(Movement::ForwardChar(1), Movement::None);
-
-                    render.schedule_update_search();
+                    render.kill_search_text(Movement::ForwardChar(1), Movement::None);
                 }
                 (KeyCode::Backspace, KeyModifiers::ALT)
                 | (KeyCode::Char('W'), KeyModifiers::CTRL) => {
-                    render
-                        .search_line
-                        .kill_text(Movement::BackwardWord(1), Movement::BackwardWord(1));
-
-                    render.schedule_update_search();
+                    render.kill_search_text(Movement::BackwardWord(1), Movement::BackwardWord(1));
                 }
                 (KeyCode::Backspace, KeyModifiers::SUPER) => {
-                    render
-                        .search_line
-                        .kill_text(Movement::StartOfLine, Movement::StartOfLine);
-
-                    render.schedule_update_search();
+                    render.kill_search_text(Movement::StartOfLine, Movement::StartOfLine);
                 }
                 (KeyCode::Char('K'), KeyModifiers::CTRL) => {
-                    render
-                        .search_line
-                        .kill_text(Movement::EndOfLine, Movement::EndOfLine);
-
-                    render.schedule_update_search();
+                    render.kill_search_text(Movement::EndOfLine, Movement::EndOfLine);
                 }
                 (KeyCode::Char('B'), KeyModifiers::CTRL)
                 | (KeyCode::ApplicationLeftArrow, KeyModifiers::NONE)
                 | (KeyCode::LeftArrow, KeyModifiers::NONE) => {
-                    render.search_line.exec_movement(Movement::BackwardChar(1));
+                    render.move_search_cursor(Movement::BackwardChar(1), false);
                 }
                 (KeyCode::Char('F'), KeyModifiers::CTRL)
                 | (KeyCode::ApplicationRightArrow, KeyModifiers::NONE)
                 | (KeyCode::RightArrow, KeyModifiers::NONE) => {
-                    render.search_line.exec_movement(Movement::ForwardChar(1));
+                    render.move_search_cursor(Movement::ForwardChar(1), false);
                 }
                 (KeyCode::ApplicationLeftArrow, KeyModifiers::CTRL)
                 | (KeyCode::LeftArrow, KeyModifiers::CTRL) => {
-                    render.search_line.exec_movement(Movement::BackwardWord(1));
+                    render.move_search_cursor(Movement::BackwardWord(1), false);
                 }
                 (KeyCode::ApplicationRightArrow, KeyModifiers::CTRL)
                 | (KeyCode::RightArrow, KeyModifiers::CTRL) => {
-                    render.search_line.exec_movement(Movement::ForwardWord(1));
+                    render.move_search_cursor(Movement::ForwardWord(1), false);
                 }
                 (KeyCode::Char('A'), KeyModifiers::CTRL) | (KeyCode::Home, KeyModifiers::NONE) => {
-                    render.search_line.exec_movement(Movement::StartOfLine);
+                    render.move_search_cursor(Movement::StartOfLine, false);
                 }
                 (KeyCode::Char('E'), KeyModifiers::CTRL) | (KeyCode::End, KeyModifiers::NONE) => {
-                    render.search_line.exec_movement(Movement::EndOfLine);
+                    render.move_search_cursor(Movement::EndOfLine, false);
+                }
+                (KeyCode::Char('a' | 'A'), m)
+                    if m == KeyModifiers::SUPER
+                        || m == (KeyModifiers::SUPER | KeyModifiers::SHIFT) =>
+                {
+                    render.select_search_line_all();
+                }
+                (KeyCode::ApplicationLeftArrow, KeyModifiers::ALT)
+                | (KeyCode::LeftArrow, KeyModifiers::ALT) => {
+                    render.move_search_cursor(Movement::BackwardWord(1), false);
+                }
+                (KeyCode::ApplicationRightArrow, KeyModifiers::ALT)
+                | (KeyCode::RightArrow, KeyModifiers::ALT) => {
+                    render.move_search_cursor(Movement::ForwardWord(1), false);
+                }
+                (KeyCode::ApplicationLeftArrow, KeyModifiers::SUPER)
+                | (KeyCode::LeftArrow, KeyModifiers::SUPER) => {
+                    render.move_search_cursor(Movement::StartOfLine, false);
+                }
+                (KeyCode::ApplicationRightArrow, KeyModifiers::SUPER)
+                | (KeyCode::RightArrow, KeyModifiers::SUPER) => {
+                    render.move_search_cursor(Movement::EndOfLine, false);
+                }
+                (KeyCode::ApplicationLeftArrow, KeyModifiers::SHIFT)
+                | (KeyCode::LeftArrow, KeyModifiers::SHIFT) => {
+                    render.move_search_cursor(Movement::BackwardChar(1), true);
+                }
+                (KeyCode::ApplicationRightArrow, KeyModifiers::SHIFT)
+                | (KeyCode::RightArrow, KeyModifiers::SHIFT) => {
+                    render.move_search_cursor(Movement::ForwardChar(1), true);
+                }
+                (KeyCode::ApplicationLeftArrow, m) | (KeyCode::LeftArrow, m) if m == shift_alt => {
+                    render.move_search_cursor(Movement::BackwardWord(1), true);
+                }
+                (KeyCode::ApplicationRightArrow, m) | (KeyCode::RightArrow, m)
+                    if m == shift_alt =>
+                {
+                    render.move_search_cursor(Movement::ForwardWord(1), true);
+                }
+                (KeyCode::ApplicationLeftArrow, m) | (KeyCode::LeftArrow, m)
+                    if m == shift_super =>
+                {
+                    render.move_search_cursor(Movement::StartOfLine, true);
+                }
+                (KeyCode::ApplicationRightArrow, m) | (KeyCode::RightArrow, m)
+                    if m == shift_super =>
+                {
+                    render.move_search_cursor(Movement::EndOfLine, true);
+                }
+                (KeyCode::Home, KeyModifiers::SUPER)
+                | (KeyCode::KeyPadHome, KeyModifiers::SUPER) => {
+                    render.move_search_cursor(Movement::StartOfLine, false);
+                }
+                (KeyCode::End, KeyModifiers::SUPER) | (KeyCode::KeyPadEnd, KeyModifiers::SUPER) => {
+                    render.move_search_cursor(Movement::EndOfLine, false);
+                }
+                (KeyCode::Home, m) | (KeyCode::KeyPadHome, m) if m == shift_super => {
+                    render.move_search_cursor(Movement::StartOfLine, true);
+                }
+                (KeyCode::End, m) | (KeyCode::KeyPadEnd, m) if m == shift_super => {
+                    render.move_search_cursor(Movement::EndOfLine, true);
+                }
+                (KeyCode::Char('u' | 'U'), KeyModifiers::CTRL) => {
+                    render.clear_pattern();
                 }
                 _ => {}
             }
@@ -1607,6 +1731,7 @@ impl std::io::Write for SearchOverlayPatternWriter {
             std::io::Error::new(std::io::ErrorKind::Other, format!("invalid UTF-8: {err:#}"))
         })?;
         render.search_line.insert_text(s);
+        render.search_selection_anchor = None;
         render.schedule_update_search();
         Ok(buf.len())
     }
