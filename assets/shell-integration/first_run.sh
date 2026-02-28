@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-CURRENT_CONFIG_VERSION=11
+CURRENT_CONFIG_VERSION=12
 CONFIG_DIR="$HOME/.config/kaku"
 STATE_FILE="$CONFIG_DIR/state.json"
 LEGACY_VERSION_FILE="$CONFIG_DIR/.kaku_config_version"

@@ -2488,7 +2488,7 @@ dependencies = [
 
 [[package]]
 name = "kaku"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2530,7 +2530,7 @@ dependencies = [
 
 [[package]]
 name = "kaku-gui"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "benchmarking",
@@ -4985,13 +4985,6 @@ dependencies = [
  "termwiz",
  "wezterm-dynamic",
  "wezterm-input-types",
-]
-
-[[package]]
-name = "test_input"
-version = "0.1.0"
-dependencies = [
- "crossterm",
 ]
 
 [[package]]

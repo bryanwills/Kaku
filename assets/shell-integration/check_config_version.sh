@@ -8,7 +8,7 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-CURRENT_CONFIG_VERSION=11
+CURRENT_CONFIG_VERSION=12
 CONFIG_DIR="$HOME/.config/kaku"
 STATE_FILE="$CONFIG_DIR/state.json"
 LEGACY_VERSION_FILE="$CONFIG_DIR/.kaku_config_version"
@@ -65,6 +65,15 @@ echo ""
 # Show only current release highlights to keep this prompt short and maintainable.
 echo -e "${BOLD}What's new:${NC}"
 case "$CURRENT_CONFIG_VERSION" in
+12)
+	echo "  • Shell text editing: Cmd+A select all, Shift+Arrow selection, ESC to cancel"
+	echo "  • AI error fixer: auto-suggests fixes on failure, Cmd+Shift+E to apply"
+	echo "  • Type y to launch Yazi, cd+Tab falls back to zsh-z history"
+	echo "  • Plugins already loaded by your config are no longer duplicated"
+	echo "  • Fixed: delete key after Chinese IME, terminal type for sudo+nano"
+	echo "  • Fixed: yazi alias conflict with existing shell aliases"
+	echo "  • Fixed: SSH sessions now use xterm-256color for better remote compatibility"
+	;;
 11)
 	echo "  • Shell text editing: Cmd+A select all, Shift+Arrow selection, ESC to cancel"
 	echo "  • AI error fixer: auto-suggests fixes on failure, Cmd+Shift+E to apply"
