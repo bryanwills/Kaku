@@ -3266,14 +3266,7 @@ impl TermWindow {
                     let kaku_cli = crate::frontend::kaku_cli_program_for_spawn();
                     self.spawn_command(
                         &SpawnCommand {
-                            args: Some(vec![
-                                "sh".to_string(),
-                                "-c".to_string(),
-                                "\"$1\" update; echo; read -p 'Press Enter to close...' -r"
-                                    .to_string(),
-                                "--".to_string(),
-                                kaku_cli,
-                            ]),
+                            args: Some(vec![kaku_cli, "update".to_string()]),
                             domain: SpawnTabDomain::DomainName("local".to_string()),
                             ..Default::default()
                         },
@@ -3286,7 +3279,7 @@ impl TermWindow {
                 } else if let Some(msg) = lookup_kaku_toast(name) {
                     self.show_toast(msg.to_string());
                 } else if name == "kaku-toast-ai-analyzing" {
-                    let message = "Kaku Assistant analyzing command...";
+                    let message = "Kaku Assistant analyzing command";
                     self.show_ai_progress_toast(message.to_string(), ai_toast_lifetime_ms(message));
                 } else if name == "kaku-toast-ai-applied" {
                     // No notification on successful apply; command output is enough.

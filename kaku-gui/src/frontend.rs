@@ -714,14 +714,7 @@ impl GuiFrontEnd {
                         let kaku_cli = kaku_cli_program_for_spawn();
                         spawn_command(
                             &SpawnCommand {
-                                args: Some(vec![
-                                    "sh".to_string(),
-                                    "-c".to_string(),
-                                    "\"$1\" update; echo; read -p 'Press Enter to close...' -r"
-                                        .to_string(),
-                                    "--".to_string(),
-                                    kaku_cli,
-                                ]),
+                                args: Some(vec![kaku_cli, "update".to_string()]),
                                 ..Default::default()
                             },
                             SpawnWhere::NewWindow,
