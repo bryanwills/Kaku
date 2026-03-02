@@ -4,8 +4,8 @@ use config::keyassignment::{ClipboardCopyDestination, QuickSelectArguments, Scro
 use config::ConfigHandle;
 use mux::domain::DomainId;
 use mux::pane::{
-    CachePolicy, ForEachPaneLogicalLine, LogicalLine, Pane, PaneId, Pattern, SearchResult,
-    WithPaneLines,
+    CachePolicy, ForEachPaneLogicalLine, LogicalLine, Pane, PaneId, PaneReader, Pattern,
+    SearchResult, WithPaneLines,
 };
 use mux::renderable::*;
 use parking_lot::{MappedMutexGuard, Mutex};
@@ -330,7 +330,7 @@ impl Pane for QuickSelectOverlay {
         Ok(())
     }
 
-    fn reader(&self) -> anyhow::Result<Option<Box<dyn std::io::Read + Send>>> {
+    fn reader(&self) -> anyhow::Result<Option<PaneReader>> {
         Ok(None)
     }
 

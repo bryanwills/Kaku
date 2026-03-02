@@ -410,7 +410,7 @@ impl GuiFrontEnd {
                                         Clipboard::PrimarySelection
                                     }
                                 },
-                                clipboard.unwrap_or_default(),
+                                clipboard.map(|s| s.to_string()).unwrap_or_default(),
                             );
                         } else {
                             log::error!("Cannot assign clipboard as there are no windows");

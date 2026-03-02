@@ -6,8 +6,10 @@
 use crate::domain::{alloc_domain_id, Domain, DomainId, DomainState};
 use crate::pane::{
     alloc_pane_id, CachePolicy, CloseReason, ForEachPaneLogicalLine, LogicalLine, Pane, PaneId,
-    WithPaneLines,
+    PaneReader, WithPaneLines,
 };
+#[cfg(unix)]
+use std::os::unix::io::AsRawFd;
 use crate::renderable::*;
 use crate::tab::Tab;
 use crate::window::WindowId;
@@ -189,8 +191,15 @@ impl Pane for TermWizTerminalPane {
         Ok(())
     }
 
-    fn reader(&self) -> anyhow::Result<Option<Box<dyn std::io::Read + Send>>> {
-        Ok(Some(Box::new(self.render_rx.try_clone()?)))
+    fn reader(&self) -> anyhow::Result<Option<PaneReader>> {
+        let reader = self.render_rx.try_clone()?;
+        #[cfg(unix)]
+        let fd = Some(reader.as_raw_fd());
+        Ok(Some(PaneReader {
+            reader: Box::new(reader),
+            #[cfg(unix)]
+            fd,
+        }))
     }
 
     fn writer(&self) -> MappedMutexGuard<'_, dyn std::io::Write> {
