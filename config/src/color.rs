@@ -77,7 +77,7 @@ impl From<RgbaColor> for String {
 
 impl std::fmt::Display for RgbaColor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.color.to_string())
+        f.write_str(&self.color.to_string())
     }
 }
 
