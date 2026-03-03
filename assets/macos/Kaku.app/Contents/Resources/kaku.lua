@@ -1499,6 +1499,7 @@ local function repo_has_pending_changes(repo_root)
     "status",
     "--porcelain",
     "--untracked-files=no",
+    "--no-optional-locks",
   })
   if not ok then
     return false
