@@ -50,7 +50,8 @@ jobs:
         env:
           KAKU_SIGNING_IDENTITY: ${{ secrets.KAKU_SIGNING_IDENTITY }}
         run: |
-          PROFILE=release-opt BUILD_ARCH=universal ./scripts/build.sh
+          set -o pipefail
+          PROFILE=release-opt BUILD_ARCH=universal ./scripts/build.sh 2>&1 | sed '/has no symbols/d'
 
       - name: Notarize Kaku
         if: env.KAKU_NOTARIZE_PASSWORD != ''
