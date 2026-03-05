@@ -353,6 +353,36 @@ export PATH="\$KAKU_ZSH_DIR/bin:\$PATH"
 # Use system installation managed by Homebrew (or user PATH).
 if command -v starship &> /dev/null; then
     eval "\$(starship init zsh)"
+
+    # Kaku workaround: Fix Zsh + Starship bug where Ctrl-C prints the literal RPROMPT string.
+    # When Zsh receives SIGINT during prompt evaluation, it aborts the command
+    # substitution and prints the literal \$(starship...) string. Pre-evaluating
+    # the right prompt in precmd avoids this entirely.
+    _kaku_fix_starship_rprompt() {
+        # Check if RPROMPT currently holds a dynamic starship command
+        if [[ "\${RPROMPT:-}" == *'\$('*'starship'*'prompt --right'* ]]; then
+            # Capture it and save it as our template
+            _kaku_starship_rprompt_cmd="\$RPROMPT"
+        fi
+
+        # If we have a saved starship command template, we should evaluate it.
+        # BUT we only overwrite RPROMPT if RPROMPT is exactly what we set it to last time,
+        # or if it is the original starship command itself.
+        # If the user sets RPROMPT="foo", we leave it alone.
+        if [[ -n "\${_kaku_starship_rprompt_cmd:-}" ]]; then
+            if [[ "\${RPROMPT:-}" == "\${_kaku_starship_rprompt_cmd}" ]] || [[ "\${RPROMPT:-}" == "\${_kaku_last_injected_rprompt:-}" ]]; then
+                local cmd="\${_kaku_starship_rprompt_cmd#'\$('}"
+                cmd="\${cmd%')'}"
+                local evaled
+                evaled="\$(eval "\$cmd" 2>/dev/null)"
+                RPROMPT="\$evaled"
+                _kaku_last_injected_rprompt="\$evaled"
+            fi
+        fi
+    }
+    if [[ \${precmd_functions[(Ie)_kaku_fix_starship_rprompt]} -eq 0 ]]; then
+        precmd_functions+=(_kaku_fix_starship_rprompt)
+    fi
 fi
 
 # Enable color output for ls
