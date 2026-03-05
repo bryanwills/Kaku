@@ -26,3 +26,8 @@ format = " is [$symbol$version]($style)"
 
 [cmd_duration]
 format = " took [$duration]($style)"
+
+# Avoid prompt width issues caused by emoji variation selectors (e.g. ☁️)
+# in some shell/font/wcwidth combinations.
+[aws]
+disabled = true
