@@ -23,7 +23,36 @@ use wezterm_dynamic::ToDynamic;
 use wezterm_term::input::{MouseButton, MouseEventKind as TMEK};
 use wezterm_term::{ClickPosition, KeyCode, KeyModifiers, LastMouseClick, StableRowIndex};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MouseDispatchTarget {
+    Ui,
+    TitleArea,
+    Terminal,
+}
+
+fn mouse_dispatch_target(
+    has_ui_item: bool,
+    coords_y: isize,
+    terminal_origin_y: isize,
+    capture: Option<&super::MouseCapture>,
+) -> MouseDispatchTarget {
+    if matches!(capture, Some(super::MouseCapture::TerminalPane(_))) {
+        MouseDispatchTarget::Terminal
+    } else if has_ui_item {
+        MouseDispatchTarget::Ui
+    } else if coords_y < terminal_origin_y {
+        MouseDispatchTarget::TitleArea
+    } else {
+        MouseDispatchTarget::Terminal
+    }
+}
+
 impl super::TermWindow {
+    fn finish_mouse_release(&mut self, press: MousePress) {
+        self.current_mouse_capture = None;
+        self.current_mouse_buttons.retain(|p| p != &press);
+    }
+
     fn resolve_ui_item(&self, event: &MouseEvent) -> Option<UIItem> {
         let x = event.coords.x;
         let y = event.coords.y;
@@ -173,17 +202,20 @@ impl super::TermWindow {
         }
 
         let mut capture_mouse = false;
+        let release_button = match &event.kind {
+            WMEK::Release(press) => Some(*press),
+            _ => None,
+        };
 
         match event.kind {
             WMEK::Release(ref press) => {
-                self.current_mouse_capture = None;
-                self.current_mouse_buttons.retain(|p| p != press);
                 if press == &MousePress::Left {
                     let was_dragging_window = self.is_window_dragging;
                     self.is_window_dragging = false;
                     let had_manual_drag_anchor = self.window_drag_position.take().is_some();
                     if had_manual_drag_anchor || was_dragging_window {
                         // Completed a window drag
+                        self.finish_mouse_release(*press);
                         return;
                     }
                 }
@@ -197,6 +229,7 @@ impl super::TermWindow {
                             context.invalidate();
                         }
                     }
+                    self.finish_mouse_release(*press);
                     return;
                 }
             }
@@ -344,65 +377,76 @@ impl super::TermWindow {
             None
         };
 
-        if let Some(item) = ui_item.clone() {
-            if capture_mouse {
-                self.current_mouse_capture = Some(MouseCapture::UI);
+        match mouse_dispatch_target(
+            ui_item.is_some(),
+            event.coords.y,
+            terminal_origin_y,
+            self.current_mouse_capture.as_ref(),
+        ) {
+            MouseDispatchTarget::Ui => {
+                let item = ui_item
+                    .clone()
+                    .expect("ui item must exist when dispatching to UI");
+                if capture_mouse {
+                    self.current_mouse_capture = Some(MouseCapture::UI);
+                }
+                self.mouse_event_ui_item(item, pane, y, event, context);
             }
-            self.mouse_event_ui_item(item, pane, y, event, context);
-        } else if event.coords.y < terminal_origin_y
-            && !matches!(
-                self.current_mouse_capture,
-                Some(MouseCapture::TerminalPane(_))
-            )
-        {
-            // Event landed in title/padding area above terminal content but missed all UI items.
-            match event.kind {
-                WMEK::Press(MousePress::Left) => {
-                    let maximized = self
-                        .window_state
-                        .intersects(WindowState::MAXIMIZED | WindowState::FULL_SCREEN);
-                    // Double-click title area to zoom window
-                    if self.last_mouse_click.as_ref().map(|c| c.streak) == Some(2) {
-                        if let Some(ref window) = self.window {
-                            if maximized {
-                                window.restore();
-                            } else {
-                                window.maximize();
+            MouseDispatchTarget::TitleArea => {
+                // Event landed in title/padding area above terminal content but missed all UI items.
+                match event.kind {
+                    WMEK::Press(MousePress::Left) => {
+                        let maximized = self
+                            .window_state
+                            .intersects(WindowState::MAXIMIZED | WindowState::FULL_SCREEN);
+                        // Double-click title area to zoom window
+                        if self.last_mouse_click.as_ref().map(|c| c.streak) == Some(2) {
+                            if let Some(ref window) = self.window {
+                                if maximized {
+                                    window.restore();
+                                } else {
+                                    window.maximize();
+                                }
                             }
+                            return;
                         }
+                        self.current_mouse_capture = Some(MouseCapture::UI);
+                        self.is_window_dragging = true;
+                        if !maximized && !cfg!(target_os = "macos") {
+                            self.window_drag_position.replace(event.clone());
+                        }
+                        context.request_drag_move();
                         return;
                     }
-                    self.current_mouse_capture = Some(MouseCapture::UI);
-                    self.is_window_dragging = true;
-                    if !maximized && !cfg!(target_os = "macos") {
-                        self.window_drag_position.replace(event.clone());
+                    WMEK::Move if self.current_mouse_capture.is_none() => {
+                        // Set Arrow cursor for move events when no capture is active.
+                        // Prevents macOS NSTextInputClient from defaulting to IBeam.
+                        context.set_cursor(Some(MouseCursor::Arrow));
                     }
-                    context.request_drag_move();
-                    return;
+                    _ => {}
                 }
-                WMEK::Move if self.current_mouse_capture.is_none() => {
-                    // Set Arrow cursor for move events when no capture is active.
-                    // Prevents macOS NSTextInputClient from defaulting to IBeam.
-                    context.set_cursor(Some(MouseCursor::Arrow));
-                }
-                _ => {}
             }
-        } else if matches!(
-            self.current_mouse_capture,
-            None | Some(MouseCapture::TerminalPane(_))
-        ) {
-            self.mouse_event_terminal(
-                pane,
-                ClickPosition {
-                    column: x,
-                    row: y,
-                    x_pixel_offset,
-                    y_pixel_offset,
-                },
-                event,
-                context,
-                capture_mouse,
-            );
+            MouseDispatchTarget::Terminal => {
+                self.mouse_event_terminal(
+                    pane,
+                    ClickPosition {
+                        column: x,
+                        row: y,
+                        x_pixel_offset,
+                        y_pixel_offset,
+                    },
+                    event,
+                    context,
+                    capture_mouse,
+                );
+            }
+        }
+
+        if let Some(press) = release_button {
+            // Keep the original capture alive until the release has been
+            // dispatched, otherwise drags that end outside the content area
+            // never complete the selection.
+            self.finish_mouse_release(press);
         }
 
         if prior_ui_item != ui_item && !self.is_window_dragging {
@@ -1316,5 +1360,41 @@ fn mouse_press_to_tmb(press: &MousePress) -> TMB {
         MousePress::Left => TMB::Left,
         MousePress::Right => TMB::Right,
         MousePress::Middle => TMB::Middle,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{mouse_dispatch_target, MouseDispatchTarget};
+    use crate::termwindow::MouseCapture;
+    use mux::pane::PaneId;
+
+    #[test]
+    fn terminal_capture_keeps_release_routed_to_terminal() {
+        assert_eq!(
+            mouse_dispatch_target(
+                true,
+                0,
+                24,
+                Some(&MouseCapture::TerminalPane(PaneId::new(1))),
+            ),
+            MouseDispatchTarget::Terminal
+        );
+    }
+
+    #[test]
+    fn ui_item_wins_when_terminal_is_not_captured() {
+        assert_eq!(
+            mouse_dispatch_target(true, 0, 24, Some(&MouseCapture::UI)),
+            MouseDispatchTarget::Ui
+        );
+    }
+
+    #[test]
+    fn title_area_wins_without_ui_or_terminal_capture() {
+        assert_eq!(
+            mouse_dispatch_target(false, 0, 24, None),
+            MouseDispatchTarget::TitleArea
+        );
     }
 }
