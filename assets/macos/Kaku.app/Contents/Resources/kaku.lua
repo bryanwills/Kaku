@@ -2849,11 +2849,11 @@ end)
 
 -- ===== Font =====
 -- Use slightly heavier font weight for light theme to improve readability.
--- Light theme: Medium base, DemiBold for bold.
+-- Light theme: Medium base, SemiBold for bold.
 -- Dark theme: Regular base, Medium for bold.
 local function build_font_config(is_light)
   local base_weight = is_light and 'Medium' or 'Regular'
-  local bold_weight = is_light and 'DemiBold' or 'Medium'
+  local bold_weight = is_light and 'SemiBold' or 'Medium'
 
   local font = wezterm.font_with_fallback({
     { family = 'JetBrains Mono', weight = base_weight },

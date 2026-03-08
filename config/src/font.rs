@@ -121,6 +121,7 @@ impl FontWeight {
             "Black" => Self::BLACK,
             "ExtraBold" => Self::EXTRABOLD,
             "Bold" => Self::BOLD,
+            "SemiBold" => Self::DEMIBOLD,
             "DemiBold" => Self::DEMIBOLD,
             "Medium" => Self::MEDIUM,
             "Regular" => Self::REGULAR,
@@ -745,5 +746,11 @@ mod test {
             let style = style.reduce_first_font_to_family();
             assert_eq!(style.font[0].family, "Inconsolata");
         }
+    }
+
+    #[test]
+    fn test_font_weight_accepts_semibold_alias() {
+        let weight = FontWeight::from_str("SemiBold").expect("SemiBold should parse");
+        assert_eq!(weight, FontWeight::DEMIBOLD);
     }
 }
