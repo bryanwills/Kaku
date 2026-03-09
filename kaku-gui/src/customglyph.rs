@@ -5054,8 +5054,6 @@ impl GlyphCache {
         metrics: &RenderMetrics,
         width: u8,
     ) -> anyhow::Result<Sprite> {
-        const DEFAULT_CURSOR_TOP_INSET_PX: isize = 4;
-
         if let Some(sprite) = self.cursor_glyphs.get(&(shape, width)) {
             return Ok(sprite.clone());
         }
@@ -5080,12 +5078,9 @@ impl GlyphCache {
         match shape {
             None => {}
             Some(CursorShape::Default) => {
-                // Keep the cursor bottom-aligned and shorten it slightly.
-                let top_inset = if metrics.cell_size.height > DEFAULT_CURSOR_TOP_INSET_PX {
-                    DEFAULT_CURSOR_TOP_INSET_PX
-                } else {
-                    0
-                };
+                // Keep the cursor bottom-aligned and size it from the font metrics
+                // so it tracks the visible glyph height across font sizes.
+                let top_inset = metrics.default_cursor_top_inset();
                 let cursor_rect = Rect::new(
                     Point::new(0, top_inset),
                     Size::new(
@@ -5164,6 +5159,7 @@ impl GlyphCache {
                 cell_size,
                 ..
             } => RenderMetrics {
+                cap_height: None,
                 descender: PixelLength::new(0.),
                 descender_row: 0,
                 descender_plus_two: 0,

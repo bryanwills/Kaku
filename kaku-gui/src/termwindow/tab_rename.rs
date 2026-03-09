@@ -10,7 +10,7 @@ use mux::tab::TabId;
 use mux::Mux;
 use std::cell::{Ref, RefCell};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use termwiz::cell::CellAttributes;
+use termwiz::cell::{unicode_column_width, CellAttributes};
 use termwiz::surface::SEQ_ZERO;
 use wezterm_term::color::{ColorAttribute, ColorPalette};
 use wezterm_term::{KeyCode, KeyModifiers, Line, MouseEvent};
@@ -36,24 +36,6 @@ pub struct TabRenameModal {
 }
 
 impl TabRenameModal {
-    fn displayed_title(term_window: &TermWindow, tab_id: TabId) -> Option<String> {
-        let mux = Mux::get();
-        let window = mux.get_window(term_window.mux_window_id)?;
-
-        term_window
-            .tab_bar
-            .items()
-            .iter()
-            .find_map(|item| match item.item {
-                crate::tabbar::TabBarItem::Tab { tab_idx, .. } => window
-                    .get_by_idx(tab_idx)
-                    .filter(|tab| tab.tab_id() == tab_id)
-                    .map(|_| item.title.as_str().trim().to_string())
-                    .filter(|title| !title.is_empty()),
-                _ => None,
-            })
-    }
-
     pub fn new(
         term_window: &mut TermWindow,
         tab_id: TabId,
@@ -64,18 +46,24 @@ impl TabRenameModal {
             .get_tab(tab_id)
             .context("tab vanished before rename could start")?;
 
-        // Use the raw tab title first to avoid capturing format-tab-title decorations
-        // (icons, indices, prefixes). Fall back to displayed title only if raw title is empty.
-        let mut value = tab.get_title();
-        if value.is_empty() {
-            value = tab
-                .get_active_pane()
-                .map(|pane| pane.get_title())
-                .unwrap_or_default();
-        }
-        if value.is_empty() {
-            value = Self::displayed_title(term_window, tab_id).unwrap_or_default();
-        }
+        let tab_info = term_window
+            .get_tab_information()
+            .into_iter()
+            .find(|info| info.tab_id == tab_id);
+        let value = tab_info
+            .as_ref()
+            .map(crate::tabbar::compute_tab_plain_title)
+            .filter(|title| !title.is_empty())
+            .unwrap_or_else(|| {
+                let explicit = tab.get_title();
+                if !explicit.is_empty() {
+                    explicit
+                } else {
+                    tab.get_active_pane()
+                        .map(|pane| pane.get_title())
+                        .unwrap_or_default()
+                }
+            });
 
         let cursor = value.chars().count();
 
@@ -89,6 +77,68 @@ impl TabRenameModal {
         };
         modal.reconfigure(term_window);
         Ok(modal)
+    }
+
+    fn editor_width(
+        &self,
+        metrics: &RenderMetrics,
+        padding: &BoxDimension,
+        border: &BoxDimension,
+        text: &str,
+        window_width: f32,
+    ) -> (f32, f32) {
+        const WINDOW_MARGIN_PX: f32 = 12.0;
+        const CURSOR_GUTTER_CELLS: usize = 2;
+
+        let min_width = self.anchor.width.max(1) as f32;
+        let max_width = (window_width - WINDOW_MARGIN_PX * 2.0).max(min_width);
+        let padding_px = padding.left.evaluate_as_pixels(DimensionContext {
+            dpi: 0.0,
+            pixel_max: window_width,
+            pixel_cell: metrics.cell_size.width as f32,
+        }) + padding.right.evaluate_as_pixels(DimensionContext {
+            dpi: 0.0,
+            pixel_max: window_width,
+            pixel_cell: metrics.cell_size.width as f32,
+        });
+        let border_px = border.left.evaluate_as_pixels(DimensionContext {
+            dpi: 0.0,
+            pixel_max: window_width,
+            pixel_cell: metrics.cell_size.width as f32,
+        }) + border.right.evaluate_as_pixels(DimensionContext {
+            dpi: 0.0,
+            pixel_max: window_width,
+            pixel_cell: metrics.cell_size.width as f32,
+        });
+        let text_columns = unicode_column_width(text, None).max(1) + CURSOR_GUTTER_CELLS;
+        let content_width = text_columns as f32 * metrics.cell_size.width as f32;
+        let desired_width = (content_width + padding_px + border_px)
+            .max(min_width)
+            .min(max_width);
+
+        (min_width, desired_width)
+    }
+
+    fn content_min_extent(
+        outer_extent: f32,
+        leading: Dimension,
+        trailing: Dimension,
+        border_leading: Dimension,
+        border_trailing: Dimension,
+        pixel_cell: f32,
+    ) -> f32 {
+        let context = DimensionContext {
+            dpi: 0.0,
+            pixel_max: outer_extent,
+            pixel_cell,
+        };
+
+        (outer_extent
+            - leading.evaluate_as_pixels(context)
+            - trailing.evaluate_as_pixels(context)
+            - border_leading.evaluate_as_pixels(context)
+            - border_trailing.evaluate_as_pixels(context))
+        .max(1.0)
     }
 
     fn value_len(&self) -> usize {
@@ -476,7 +526,7 @@ impl TabRenameModal {
                 poly: SizedPoly {
                     poly: if visible { INLINE_CURSOR } else { &[] },
                     width: Dimension::Pixels(2.0),
-                    height: Dimension::Pixels((metrics.cell_size.height as f32 - 6.0).max(1.0)),
+                    height: Dimension::Pixels((metrics.cell_size.height as f32 - 2.0).max(1.0)),
                 },
             },
         )
@@ -486,8 +536,8 @@ impl TabRenameModal {
         .margin(BoxDimension {
             left: Dimension::Pixels(1.0),
             right: Dimension::Pixels(-3.0),
-            top: Dimension::Pixels(-6.0),
-            bottom: Dimension::Pixels(1.0),
+            top: Dimension::Pixels(5.0),
+            bottom: Dimension::Pixels(-5.0),
         })
         .colors(ElementColors {
             border: BorderColor::default(),
@@ -503,7 +553,22 @@ impl TabRenameModal {
     ) {
         let cursor_rect = match &computed.content {
             ComputedElementContent::Children(kids) => {
-                let Some(kid) = kids.get(cursor_element_idx) else {
+                // The rename modal layout wraps its content in a single row element,
+                // so the actual cursor segment lives one level deeper in kids[0].children.
+                // If the layout ever gains sibling rows at the top level, this unwrapping
+                // step will no longer apply and cursor_element_idx will index kids directly.
+                let target_kids = if kids.len() == 1 {
+                    match &kids[0].content {
+                        ComputedElementContent::Children(inner) => inner.as_slice(),
+                        ComputedElementContent::Text(_) | ComputedElementContent::Poly { .. } => {
+                            kids.as_slice()
+                        }
+                    }
+                } else {
+                    kids.as_slice()
+                };
+
+                let Some(kid) = target_kids.get(cursor_element_idx) else {
                     return;
                 };
 
@@ -600,9 +665,7 @@ impl TabRenameModal {
                 + Duration::from_millis(ms_to_next_toggle.max(1).min(u128::from(u64::MAX)) as u64),
         ));
 
-        let width = self.anchor.width.max(1) as f32;
         let height = self.anchor.height.max(1) as f32;
-        let x = self.anchor.x as f32;
         let y = self.anchor.y as f32;
         let padding = BoxDimension {
             left: Dimension::Pixels((0.5 * metrics.cell_size.width as f32) + 4.0),
@@ -610,11 +673,12 @@ impl TabRenameModal {
             top: Dimension::Cells(0.2),
             bottom: Dimension::Cells(0.25),
         };
+        let border = BoxDimension::new(Dimension::Pixels(1.0));
 
         let mut row = vec![];
         let cursor_element_idx;
 
-        if let Some(composing) = composing {
+        if let Some(composing) = composing.as_deref() {
             let (replace_start, replace_end) = selection.unwrap_or((cursor, cursor));
             let left = value.chars().take(replace_start).collect::<String>();
             let right = value.chars().skip(replace_end).collect::<String>();
@@ -623,7 +687,12 @@ impl TabRenameModal {
                 row.push(Self::text_segment(&font, &palette, left, &text_attrs));
             }
 
-            row.push(Self::text_segment(&font, &palette, composing, &text_attrs));
+            row.push(Self::text_segment(
+                &font,
+                &palette,
+                composing.to_string(),
+                &text_attrs,
+            ));
             cursor_element_idx = row.len();
             row.push(Self::cursor_segment(
                 &font,
@@ -688,13 +757,57 @@ impl TabRenameModal {
             }
         }
 
-        let element = Element::new(&font, ElementContent::Children(row))
+        let composed_text = if let Some(composing) = composing.as_deref() {
+            let (replace_start, replace_end) = selection.unwrap_or((cursor, cursor));
+            let left = value.chars().take(replace_start).collect::<String>();
+            let right = value.chars().skip(replace_end).collect::<String>();
+            format!("{left}{composing}{right}")
+        } else {
+            value.clone()
+        };
+        let window_width = term_window.dimensions.pixel_width as f32;
+        let (min_width, desired_width) =
+            self.editor_width(&metrics, &padding, &border, &composed_text, window_width);
+        let anchor_left = self.anchor.x as f32;
+        let anchor_right = anchor_left + self.anchor.width as f32;
+        let desired_x = anchor_left + (self.anchor.width as f32 - desired_width) / 2.0;
+        let max_x = (window_width - desired_width).max(0.0);
+        let x = desired_x.clamp(0.0, max_x);
+        let x = x.min(anchor_right - min_width).min(max_x).max(0.0);
+
+        let row = Element::new(&font, ElementContent::Children(row))
+            .vertical_align(VerticalAlign::Middle)
+            .margin(BoxDimension {
+                left: Dimension::Pixels(0.0),
+                right: Dimension::Pixels(0.0),
+                top: Dimension::Pixels(1.0),
+                bottom: Dimension::Pixels(-1.0),
+            });
+        let content_min_width = Self::content_min_extent(
+            min_width,
+            padding.left,
+            padding.right,
+            border.left,
+            border.right,
+            metrics.cell_size.width as f32,
+        );
+        let content_min_height = Self::content_min_extent(
+            height,
+            padding.top,
+            padding.bottom,
+            border.top,
+            border.bottom,
+            metrics.cell_size.height as f32,
+        );
+
+        let element = Element::new(&font, ElementContent::Children(vec![row]))
             .colors(element_colors)
             .padding(padding)
-            .border(BoxDimension::new(Dimension::Pixels(1.0)))
+            .border(border)
             .border_corners(border_corners)
-            .min_width(Some(Dimension::Pixels(width)))
-            .min_height(Some(Dimension::Pixels(height)))
+            .min_width(Some(Dimension::Pixels(content_min_width)))
+            .max_width(Some(Dimension::Pixels(desired_width)))
+            .min_height(Some(Dimension::Pixels(content_min_height)))
             .display(DisplayType::Block);
 
         let dimensions = term_window.dimensions;
@@ -710,7 +823,7 @@ impl TabRenameModal {
                     pixel_max: dimensions.pixel_width as f32,
                     pixel_cell: metrics.cell_size.width as f32,
                 },
-                bounds: euclid::rect(x, y, width, height),
+                bounds: euclid::rect(x, y, desired_width, height),
                 metrics: &metrics,
                 gl_state: term_window.render_state.as_ref().unwrap(),
                 zindex: 120,

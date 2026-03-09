@@ -6,6 +6,7 @@ use crate::frontend::{front_end, try_front_end};
 use crate::inputmap::InputMap;
 #[cfg(not(target_os = "macos"))]
 use crate::overlay::confirm_close_window;
+use crate::overlay::launcher::LauncherTabEntry;
 use crate::overlay::{
     confirm_close_pane, confirm_close_tab, confirm_quit_program, launcher, show_debug_overlay,
     start_overlay, start_overlay_pane, CopyModeParams, CopyOverlay, LauncherArgs, LauncherFlags,
@@ -223,6 +224,8 @@ struct RenderMetricsCacheEntry {
 #[derive(Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 struct RenderMetricsDiskEntry {
     key: RenderMetricsCacheKey,
+    #[serde(default)]
+    cap_height: Option<f64>,
     descender: f64,
     descender_row: isize,
     descender_plus_two: isize,
@@ -275,6 +278,7 @@ fn load_render_metrics_from_disk(key: RenderMetricsCacheKey) -> Option<RenderMet
     }
 
     Some(RenderMetrics {
+        cap_height: entry.cap_height.map(PixelLength::new),
         descender: PixelLength::new(entry.descender),
         descender_row: entry.descender_row,
         descender_plus_two: entry.descender_plus_two,
@@ -298,6 +302,7 @@ fn persist_render_metrics_to_disk(key: RenderMetricsCacheKey, metrics: RenderMet
 
     let entry = RenderMetricsDiskEntry {
         key,
+        cap_height: metrics.cap_height.map(|value| value.get()),
         descender: metrics.descender.get(),
         descender_row: metrics.descender_row,
         descender_plus_two: metrics.descender_plus_two,
@@ -3009,8 +3014,22 @@ impl TermWindow {
             .fuzzy_help_text
             .unwrap_or("Fuzzy matching: ".to_string());
 
-        let config = &self.config;
+        let config = self.config.clone();
         let alphabet = args.alphabet.unwrap_or(config.launcher_alphabet.clone());
+        let tabs = if flags.contains(LauncherFlags::TABS) {
+            let tab_info = self.get_tab_information();
+            Some(
+                tab_info
+                    .iter()
+                    .map(|tab| LauncherTabEntry {
+                        title: crate::tabbar::compute_tab_plain_title(tab),
+                        tab_idx: tab.tab_index,
+                    })
+                    .collect(),
+            )
+        } else {
+            None
+        };
 
         promise::spawn::spawn(async move {
             let args = LauncherArgs::new(
@@ -3022,6 +3041,7 @@ impl TermWindow {
                 &help_text,
                 &fuzzy_help_text,
                 &alphabet,
+                tabs,
             )
             .await;
 

@@ -41,7 +41,6 @@ struct Entry {
 pub struct LauncherTabEntry {
     pub title: String,
     pub tab_idx: usize,
-    pub pane_count: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -77,6 +76,7 @@ impl LauncherArgs {
         help_text: &str,
         fuzzy_help_text: &str,
         alphabet: &str,
+        tabs: Option<Vec<LauncherTabEntry>>,
     ) -> Self {
         let mux = Mux::get();
 
@@ -88,7 +88,9 @@ impl LauncherArgs {
             vec![]
         };
 
-        let tabs = if flags.contains(LauncherFlags::TABS) {
+        let tabs = if let Some(tabs) = tabs {
+            tabs
+        } else if flags.contains(LauncherFlags::TABS) {
             // Ideally we'd resolve the tabs on the fly once we've started the
             // overlay, but since the overlay runs in a different thread, accessing
             // the mux list is a bit awkward.  To get the ball rolling we capture
@@ -108,11 +110,7 @@ impl LauncherArgs {
                     } else {
                         tab_title
                     };
-                    LauncherTabEntry {
-                        title,
-                        tab_idx,
-                        pane_count: tab.count_panes(),
-                    }
+                    LauncherTabEntry { title, tab_idx }
                 })
                 .collect()
         } else {
@@ -242,21 +240,6 @@ impl LauncherState {
     fn build_entries(&mut self, args: LauncherArgs) {
         let config = configuration();
 
-        // Add a single "Pane Encoding" submenu entry as the very first item
-        // Only when NOT already viewing the encoding submenu
-        if !args.flags.contains(LauncherFlags::PANE_ENCODINGS) {
-            self.entries.push(Entry {
-                label: "Pane Encoding".to_string(),
-                action: KeyAssignment::ShowLauncherArgs(LauncherActionArgs {
-                    flags: LauncherFlags::PANE_ENCODINGS,
-                    title: Some("Pane Encoding".to_string()),
-                    help_text: None,
-                    fuzzy_help_text: None,
-                    alphabet: None,
-                }),
-            });
-        }
-
         // Pull in the user defined entries from the launch_menu
         // section of the configuration.
         if args.flags.contains(LauncherFlags::LAUNCH_MENU_ITEMS) {
@@ -325,10 +308,7 @@ impl LauncherState {
 
         for tab in &args.tabs {
             self.entries.push(Entry {
-                label: match tab.pane_count {
-                    Some(pane_count) => format!("{}. {pane_count} panes", tab.title),
-                    None => format!("{}.", tab.title),
-                },
+                label: tab.title.clone(),
                 action: KeyAssignment::ActivateTab(tab.tab_idx as isize),
             });
         }
@@ -410,16 +390,32 @@ impl LauncherState {
             key_entries.sort_by(|a, b| a.label.cmp(&b.label));
             self.entries.append(&mut key_entries);
         }
+
+        // Keep the encoding submenu entry at the very end so it doesn't steal
+        // the first numeric shortcut from tabs or primary launcher commands.
+        if !args.flags.contains(LauncherFlags::PANE_ENCODINGS) {
+            self.entries.push(Entry {
+                label: "Pane Encoding".to_string(),
+                action: KeyAssignment::ShowLauncherArgs(LauncherActionArgs {
+                    flags: LauncherFlags::PANE_ENCODINGS,
+                    title: Some("Pane Encoding".to_string()),
+                    help_text: None,
+                    fuzzy_help_text: None,
+                    alphabet: None,
+                }),
+            });
+        }
     }
 
     fn render(&mut self, term: &mut TermWizTerminal) -> termwiz::Result<()> {
         let size = term.get_screen_size()?;
         let max_width = size.cols.saturating_sub(6);
         let max_items = size.rows.saturating_sub(ROW_OVERHEAD);
-        if max_items != self.max_items {
+        let desired_label_count = self.filtered_entries.len().min(max_items + 1);
+        if max_items != self.max_items || self.labels.len() != desired_label_count {
             self.labels = quickselect::compute_labels_for_alphabet_with_preserved_case(
                 &self.alphabet,
-                self.filtered_entries.len().min(max_items + 1),
+                desired_label_count,
             );
             self.max_items = max_items;
         }
@@ -445,13 +441,21 @@ impl LauncherState {
         let colors = &config.resolved_palette;
         let launcher_label_fg = colors.launcher_label_fg;
         let launcher_label_bg = colors.launcher_label_bg;
-        let selected_bg = colors
-            .ansi
-            .as_ref()
-            .map(|ansi| ansi[5])
-            .or_else(|| colors.brights.as_ref().map(|brights| brights[5]));
+        let white = config::RgbaColor::from((0xff, 0xff, 0xff));
+        let black = config::RgbaColor::from((0x00, 0x00, 0x00));
+        let is_light_bg = |bg: config::RgbaColor| 0.299 * bg.0 + 0.587 * bg.1 + 0.114 * bg.2 > 0.7;
+        let selected_bg_color = colors
+            .selection_bg
+            .filter(|bg| !is_light_bg(*bg))
+            .or_else(|| colors.ansi.as_ref().map(|ansi| ansi[5]))
+            .or_else(|| colors.brights.as_ref().map(|brights| brights[5]))
+            .or(colors.selection_bg);
         let selected_bg_attr =
-            selected_bg.map(|bg| ColorAttribute::from(config::ColorSpec::Color(bg)));
+            selected_bg_color.map(|bg| ColorAttribute::from(config::ColorSpec::Color(bg)));
+        let selected_fg_attr = selected_bg_color
+            .map(|bg| if is_light_bg(bg) { black } else { white })
+            .or(colors.foreground)
+            .map(|fg| ColorAttribute::from(config::ColorSpec::Color(fg)));
 
         for (row_num, (entry_idx, entry)) in self
             .filtered_entries
@@ -470,10 +474,12 @@ impl LauncherState {
             if entry_idx == self.active_idx {
                 if let Some(selected_bg_attr) = selected_bg_attr {
                     changes.push(AttributeChange::Background(selected_bg_attr).into());
-                    changes
-                        .push(AttributeChange::Foreground(ColorAttribute::PaletteIndex(15)).into());
-                    attr.set_background(selected_bg_attr)
-                        .set_foreground(ColorAttribute::PaletteIndex(15));
+                    attr.set_background(selected_bg_attr);
+
+                    if let Some(selected_fg_attr) = selected_fg_attr {
+                        changes.push(AttributeChange::Foreground(selected_fg_attr).into());
+                        attr.set_foreground(selected_fg_attr);
+                    }
                 } else {
                     changes.push(AttributeChange::Reverse(true).into());
                     attr.set_reverse(true);

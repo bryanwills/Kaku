@@ -11,6 +11,7 @@ use wezterm_font::{FontConfiguration, FontMetrics};
 
 #[derive(Copy, Clone, Debug)]
 pub struct RenderMetrics {
+    pub cap_height: Option<PixelLength>,
     pub descender: PixelLength,
     pub descender_row: IntPixelLength,
     pub descender_plus_two: IntPixelLength,
@@ -35,6 +36,7 @@ impl RenderMetrics {
         let strike_row = descender_row / 2;
 
         Self {
+            cap_height: metrics.cap_height,
             descender: metrics.descender,
             descender_row,
             descender_plus_two,
@@ -53,6 +55,7 @@ impl RenderMetrics {
         let adjust = (((self.descender_row as f64 * line_height) - self.descender_row as f64) / 2.0)
             as isize;
         Self {
+            cap_height: self.cap_height,
             descender: self.descender - PixelLength::new(adjust as f64),
             descender_row: self.descender_row - adjust,
             descender_plus_two: self.descender_plus_two - adjust,
@@ -66,6 +69,17 @@ impl RenderMetrics {
         let mut scaled = self.clone();
         scaled.cell_size.width = (self.cell_size.width as f64 * scale) as isize;
         scaled
+    }
+
+    pub fn default_cursor_top_inset(&self) -> IntPixelLength {
+        let cell_height = self.cell_size.height.max(1);
+        let cursor_height = self
+            .cap_height
+            .map(|cap_height| cap_height.get() - self.descender.get())
+            .unwrap_or_else(|| cell_height as f64 + self.descender.get())
+            .round() as isize;
+        let cursor_height = cursor_height.clamp(1, cell_height);
+        cell_height - cursor_height
     }
 
     pub fn new(fonts: &Rc<FontConfiguration>) -> anyhow::Result<Self> {
@@ -125,6 +139,7 @@ impl RenderMetrics {
         };
 
         Ok(Self {
+            cap_height: metrics.cap_height,
             descender: metrics.descender - PixelLength::new(line_height_y_adjust),
             descender_row,
             descender_plus_two,
@@ -165,5 +180,42 @@ impl UtilSprites {
             white_space,
             filled_box,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RenderMetrics;
+    use wezterm_font::units::PixelLength;
+    use window::Size;
+
+    #[test]
+    fn default_cursor_top_inset_uses_cap_height_when_available() {
+        let metrics = RenderMetrics {
+            cap_height: Some(PixelLength::new(11.0)),
+            descender: PixelLength::new(-4.0),
+            descender_row: 0,
+            descender_plus_two: 0,
+            underline_height: 1,
+            strike_row: 0,
+            cell_size: Size::new(10, 20),
+        };
+
+        assert_eq!(metrics.default_cursor_top_inset(), 5);
+    }
+
+    #[test]
+    fn default_cursor_top_inset_falls_back_to_ascent() {
+        let metrics = RenderMetrics {
+            cap_height: None,
+            descender: PixelLength::new(-4.0),
+            descender_row: 0,
+            descender_plus_two: 0,
+            underline_height: 1,
+            strike_row: 0,
+            cell_size: Size::new(10, 20),
+        };
+
+        assert_eq!(metrics.default_cursor_top_inset(), 4);
     }
 }

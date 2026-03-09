@@ -171,6 +171,52 @@ fn compute_tab_title(
     }
 }
 
+fn pane_cwd_title(pane: &PaneInformation) -> Option<String> {
+    let mux = Mux::try_get()?;
+    let real_pane = mux.get_pane(pane.pane_id)?;
+    let cwd = real_pane.get_current_working_dir(CachePolicy::AllowStale)?;
+    let path = cwd.path().trim_end_matches('/');
+    if path.is_empty() {
+        return None;
+    }
+
+    let path = Path::new(path);
+    let current = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .or_else(|| path.to_str())?;
+
+    let parent = path
+        .parent()
+        .and_then(|parent| parent.file_name())
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+
+    if parent.is_empty() {
+        Some(current.to_string())
+    } else {
+        Some(format!("{parent}/{current}"))
+    }
+}
+
+pub fn compute_tab_plain_title(tab: &TabInformation) -> String {
+    if !tab.tab_title.is_empty() {
+        return tab.tab_title.clone();
+    }
+
+    if let Some(pane) = &tab.active_pane {
+        if let Some(title) = pane_cwd_title(pane) {
+            return title;
+        }
+        if let Some(ssh_host) = ssh_destination_for_pane(pane) {
+            return ssh_host;
+        }
+        return pane.title.clone();
+    }
+
+    "no pane".to_string()
+}
+
 fn build_default_title(
     tab: &TabInformation,
     config: &ConfigHandle,
