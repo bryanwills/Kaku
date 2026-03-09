@@ -25,6 +25,25 @@ pub enum AllowImage {
 
 const STATUS_DOT_SIZE: f32 = 12.0;
 
+fn toast_colors_for_palette(
+    palette: &wezterm_term::color::ColorPalette,
+    alpha: f32,
+) -> (LinearRgba, LinearRgba) {
+    if crate::termwindow::is_light_color(&palette.background) {
+        let bg_linear = palette.colors.0[3].to_linear();
+        (
+            LinearRgba(bg_linear.0, bg_linear.1, bg_linear.2, 0.9 * alpha),
+            LinearRgba(0.1, 0.1, 0.1, alpha),
+        )
+    } else {
+        let bg_linear = palette.colors.0[13].to_linear();
+        (
+            LinearRgba(bg_linear.0, bg_linear.1, bg_linear.2, 0.9 * alpha),
+            LinearRgba(1.0, 1.0, 1.0, alpha),
+        )
+    }
+}
+
 impl crate::TermWindow {
     pub fn paint_impl(&mut self, frame: &mut RenderFrame) -> anyhow::Result<()> {
         self.num_frames += 1;
@@ -637,26 +656,14 @@ impl crate::TermWindow {
             1.0
         };
 
-        // Use theme-appropriate toast colors:
-        // Light theme: yellow/gold background with dark text
-        // Dark theme: purple background with white text
-        let palette = self.palette();
-        let is_light = crate::termwindow::is_light_color(&palette.background);
-        let (bg_color, text_color) = if is_light {
-            // Light theme: use yellow/gold (ANSI 3) with dark text
-            let bg_linear = palette.colors.0[3].to_linear();
-            (
-                LinearRgba(bg_linear.0, bg_linear.1, bg_linear.2, 0.9 * alpha),
-                LinearRgba(0.1, 0.1, 0.1, alpha),
-            )
+        // Match the toast to the currently visible terminal palette so it
+        // stays in sync with theme changes and client palette overrides.
+        let palette = if let Some(pane) = self.get_active_pane_or_overlay() {
+            pane.palette()
         } else {
-            // Dark theme: use purple (ANSI 13) with white text
-            let bg_linear = palette.colors.0[13].to_linear();
-            (
-                LinearRgba(bg_linear.0, bg_linear.1, bg_linear.2, 0.9 * alpha),
-                LinearRgba(1.0, 1.0, 1.0, alpha),
-            )
+            self.palette().clone()
         };
+        let (bg_color, text_color) = toast_colors_for_palette(&palette, alpha);
         let toast_radius = Dimension::Pixels(8.0);
 
         let text = Element::new(&font, ElementContent::Text(message.clone()))
@@ -756,5 +763,44 @@ impl crate::TermWindow {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::toast_colors_for_palette;
+    use wezterm_term::color::{ColorPalette, SrgbaTuple};
+    use window::color::LinearRgba;
+
+    #[test]
+    fn light_palette_uses_gold_background_and_dark_text() {
+        let mut palette = ColorPalette::default();
+        palette.background = SrgbaTuple(0.95, 0.95, 0.95, 1.0);
+        palette.colors.0[3] = SrgbaTuple(0.8, 0.7, 0.2, 1.0);
+
+        let (bg, text) = toast_colors_for_palette(&palette, 1.0);
+        let expected_bg = palette.colors.0[3].to_linear();
+
+        assert_eq!(
+            bg,
+            LinearRgba(expected_bg.0, expected_bg.1, expected_bg.2, 0.9)
+        );
+        assert_eq!(text, LinearRgba(0.1, 0.1, 0.1, 1.0));
+    }
+
+    #[test]
+    fn dark_palette_uses_accent_background_and_light_text() {
+        let mut palette = ColorPalette::default();
+        palette.background = SrgbaTuple(0.08, 0.08, 0.08, 1.0);
+        palette.colors.0[13] = SrgbaTuple(0.5, 0.3, 0.8, 1.0);
+
+        let (bg, text) = toast_colors_for_palette(&palette, 1.0);
+        let expected_bg = palette.colors.0[13].to_linear();
+
+        assert_eq!(
+            bg,
+            LinearRgba(expected_bg.0, expected_bg.1, expected_bg.2, 0.9)
+        );
+        assert_eq!(text, LinearRgba(1.0, 1.0, 1.0, 1.0));
     }
 }
