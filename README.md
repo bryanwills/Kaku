@@ -83,7 +83,6 @@ Built-in zsh plugins bundled by default:
 - **zsh-completions**: Extended command and subcommand completion definitions.
 - **Syntax Highlighting**: Real-time command validation and coloring.
 - **Autosuggestions**: Intelligent, history-based completions similar to Fish shell.
-- **Smart Tab**: Only active inside Kaku sessions by default. Set `KAKU_SMART_TAB_DISABLE=1` before sourcing `~/.config/kaku/zsh/kaku.zsh` to keep your own Tab binding everywhere.
 
 Optional CLI tools installed via Homebrew during `kaku init`:
 
@@ -95,6 +94,13 @@ Optional CLI tools installed via Homebrew during `kaku init`:
 Kaku uses `~/.config/kaku/kaku.lua` for configuration, fully compatible with WezTerm's Lua API, with built-in defaults at `Kaku.app/Contents/Resources/kaku.lua` as fallback.
 
 Run `kaku config` or press `Cmd + ,` to open the Settings TUI and edit common options (font, theme, opacity, bells, Kaku Assistant) without manually editing config files.
+
+If you already use your own Zsh completion workflow such as `fzf-tab`, Kaku's Smart Tab only applies inside Kaku sessions by default. You can also disable it explicitly before loading Kaku shell integration:
+
+```zsh
+export KAKU_SMART_TAB_DISABLE=1
+[[ -f "$HOME/.config/kaku/zsh/kaku.zsh" ]] && source "$HOME/.config/kaku/zsh/kaku.zsh"
+```
 
 You can also remap true-color output from specific apps to keep theme consistency:
 
