@@ -123,6 +123,7 @@ const ANTIGRAVITY_GET_COMMAND_MODEL_CONFIGS_PATH: &str =
     "/exa.language_server_pb.LanguageServerService/GetCommandModelConfigs";
 const ANTIGRAVITY_GET_UNLEASH_DATA_PATH: &str =
     "/exa.language_server_pb.LanguageServerService/GetUnleashData";
+const ANTIGRAVITY_CONNECT_PROTOCOL_VERSION: &str = "1";
 
 static UI_ERRORS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 
@@ -880,6 +881,11 @@ fn post_antigravity_lsp_json(
             "-H",
             "Content-Type: application/json",
             "-H",
+            &format!(
+                "Connect-Protocol-Version: {}",
+                ANTIGRAVITY_CONNECT_PROTOCOL_VERSION
+            ),
+            "-H",
             &format!("{ANTIGRAVITY_CSRF_HEADER}: {csrf_token}"),
             "--data",
             &payload,
@@ -1128,27 +1134,74 @@ fn antigravity_quota_window_from_object(
     })
 }
 
-fn collect_antigravity_quota_windows(
+fn collect_antigravity_quota_windows_from_value(
     value: &serde_json::Value,
     model_name_map: &HashMap<String, String>,
     windows: &mut Vec<AntigravityQuotaWindow>,
 ) {
     match value {
+        serde_json::Value::Array(items) => {
+            for item in items {
+                if let Some(map) = item.as_object() {
+                    if let Some(window) = antigravity_quota_window_from_object(map, model_name_map)
+                    {
+                        windows.push(window);
+                    }
+                }
+            }
+        }
         serde_json::Value::Object(map) => {
             if let Some(window) = antigravity_quota_window_from_object(map, model_name_map) {
                 windows.push(window);
             }
-            for child in map.values() {
-                collect_antigravity_quota_windows(child, model_name_map, windows);
-            }
-        }
-        serde_json::Value::Array(items) => {
-            for item in items {
-                collect_antigravity_quota_windows(item, model_name_map, windows);
-            }
         }
         _ => {}
     }
+}
+
+fn collect_antigravity_quota_windows_from_paths(
+    root: &serde_json::Value,
+    paths: &[&str],
+    model_name_map: &HashMap<String, String>,
+    windows: &mut Vec<AntigravityQuotaWindow>,
+) {
+    for path in paths {
+        if let Some(value) = root.pointer(path) {
+            collect_antigravity_quota_windows_from_value(value, model_name_map, windows);
+        }
+    }
+}
+
+fn antigravity_command_model_ids(command_model_configs: &serde_json::Value) -> Vec<String> {
+    const ARRAY_PATHS: [&str; 2] = ["/clientModelConfigs", "/configs"];
+    let mut model_ids = Vec::new();
+
+    for path in ARRAY_PATHS {
+        let Some(items) = command_model_configs
+            .pointer(path)
+            .and_then(|value| value.as_array())
+        else {
+            continue;
+        };
+        for item in items {
+            let Some(map) = item.as_object() else {
+                continue;
+            };
+            let model_id = map
+                .get("modelId")
+                .or_else(|| map.get("id"))
+                .or_else(|| map.get("modelOrAlias").and_then(|value| value.get("model")))
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.is_empty());
+            if let Some(model_id) = model_id {
+                model_ids.push(model_id.to_string());
+            }
+        }
+    }
+
+    model_ids.sort();
+    model_ids.dedup();
+    model_ids
 }
 
 fn antigravity_format_reset_time(raw: &str) -> Option<String> {
@@ -1264,8 +1317,26 @@ fn antigravity_fallback_selected_model_label() -> Option<String> {
 
 fn antigravity_selected_model_id(
     user_status: &serde_json::Value,
+    command_model_configs: &serde_json::Value,
     model_ids: &[String],
 ) -> Option<String> {
+    const COMMAND_MODEL_PATHS: [&str; 2] = [
+        "/selectedModelConfig/modelOrAlias/model",
+        "/commandModelConfig/modelOrAlias/model",
+    ];
+    if let Some(model_id) = COMMAND_MODEL_PATHS.iter().find_map(|path| {
+        command_model_configs
+            .pointer(path)
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_string())
+    }) {
+        return Some(model_id);
+    }
+
+    // defaultOverrideModelConfig tracks the current Antigravity model in live status.
+    // A single entry in GetCommandModelConfigs can simply mean a command default,
+    // so we only use that endpoint as a last-resort fallback.
     const PATHS: [&str; 4] = [
         "/userStatus/cascadeModelConfigData/defaultOverrideModelConfig/modelOrAlias/model",
         "/cascadeModelConfigData/defaultOverrideModelConfig/modelOrAlias/model",
@@ -1287,6 +1358,12 @@ fn antigravity_selected_model_id(
             return Some(model_id);
         }
     }
+
+    let command_model_ids = antigravity_command_model_ids(command_model_configs);
+    if let [model_id] = command_model_ids.as_slice() {
+        return Some(model_id.clone());
+    }
+
     None
 }
 
@@ -1302,7 +1379,22 @@ fn parse_antigravity_usage_snapshot(data: &serde_json::Value) -> Option<Antigrav
 
     let model_name_map = antigravity_model_name_map(command_model_configs);
     let mut windows = Vec::new();
-    collect_antigravity_quota_windows(user_status, &model_name_map, &mut windows);
+    collect_antigravity_quota_windows_from_paths(
+        user_status,
+        &[
+            "/userStatus/cascadeModelConfigData/clientModelConfigs",
+            "/cascadeModelConfigData/clientModelConfigs",
+            "/clientModelConfigs",
+        ],
+        &model_name_map,
+        &mut windows,
+    );
+    collect_antigravity_quota_windows_from_paths(
+        command_model_configs,
+        &["/clientModelConfigs", "/configs"],
+        &model_name_map,
+        &mut windows,
+    );
 
     let mut deduped = HashMap::<String, AntigravityQuotaWindow>::new();
     let mut label_order = Vec::<String>::new();
@@ -1334,31 +1426,32 @@ fn parse_antigravity_usage_snapshot(data: &serde_json::Value) -> Option<Antigrav
     model_ids.dedup();
 
     let mut selected_model_label = None;
-    let windows =
-        if let Some(selected_model_id) = antigravity_selected_model_id(user_status, &model_ids) {
-            let selected_model_label_hint = model_name_map
-                .get(&selected_model_id)
-                .map(|label| antigravity_strip_parenthetical_suffix(label));
-            let selected_windows = windows
-                .iter()
-                .filter(|window| {
-                    window.model_id.as_deref() == Some(selected_model_id.as_str())
-                        || selected_model_label_hint
-                            .as_deref()
-                            .is_some_and(|label| window.label == label)
-                })
-                .cloned()
-                .collect::<Vec<_>>();
+    let windows = if let Some(selected_model_id) =
+        antigravity_selected_model_id(user_status, command_model_configs, &model_ids)
+    {
+        let selected_model_label_hint = model_name_map
+            .get(&selected_model_id)
+            .map(|label| antigravity_strip_parenthetical_suffix(label));
+        let selected_windows = windows
+            .iter()
+            .filter(|window| {
+                window.model_id.as_deref() == Some(selected_model_id.as_str())
+                    || selected_model_label_hint
+                        .as_deref()
+                        .is_some_and(|label| window.label == label)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
 
-            if !selected_windows.is_empty() {
-                selected_model_label = selected_windows.first().map(|window| window.label.clone());
-                selected_windows
-            } else {
-                windows
-            }
+        if !selected_windows.is_empty() {
+            selected_model_label = selected_windows.first().map(|window| window.label.clone());
+            selected_windows
         } else {
             windows
-        };
+        }
+    } else {
+        windows
+    };
 
     let selected_window = if selected_model_label.is_none() {
         match windows.first().cloned() {
@@ -4865,6 +4958,13 @@ pub fn run() -> anyhow::Result<()> {
     result
 }
 
+fn is_confirm_key(code: KeyCode) -> bool {
+    matches!(
+        code,
+        KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r') | KeyCode::Char(' ')
+    )
+}
+
 fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
@@ -4891,9 +4991,7 @@ fn run_loop(
                 app.status_expire = None;
                 if app.is_selecting() {
                     match key.code {
-                        KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r') => {
-                            app.confirm_select()
-                        }
+                        code if is_confirm_key(code) => app.confirm_select(),
                         KeyCode::Esc => app.cancel_select(),
                         KeyCode::Up | KeyCode::Char('k') => app.move_select_up(),
                         KeyCode::Down | KeyCode::Char('j') => app.move_select_down(),
@@ -4986,7 +5084,7 @@ fn run_loop(
                     }
                     KeyCode::Up | KeyCode::Char('k') => app.move_up(),
                     KeyCode::Down | KeyCode::Char('j') => app.move_down(),
-                    KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r') => app.start_edit(),
+                    code if is_confirm_key(code) => app.start_edit(),
                     KeyCode::Char('o') => {
                         if let Some(path) = app.config_path_to_open() {
                             match with_terminal_suspended(terminal, || open_path_in_editor(&path)) {
@@ -5568,6 +5666,51 @@ mod tests {
     }
 
     #[test]
+    fn antigravity_usage_snapshot_ignores_unrelated_nested_quota_entries() {
+        let data = serde_json::json!({
+            "user_status": {
+                "userStatus": {
+                    "cascadeModelConfigData": {
+                        "defaultOverrideModelConfig": {
+                            "modelOrAlias": {
+                                "model": "MODEL_PLACEHOLDER_M18"
+                            }
+                        },
+                        "clientModelConfigs": [
+                            {
+                                "label": "Gemini 3 Flash",
+                                "modelOrAlias": {
+                                    "model": "MODEL_PLACEHOLDER_M18"
+                                },
+                                "quotaInfo": {
+                                    "remainingFraction": 1.0
+                                }
+                            }
+                        ]
+                    },
+                    "someOtherSection": {
+                        "history": [
+                            {
+                                "label": "Gemini 3 Flash",
+                                "modelOrAlias": {
+                                    "model": "MODEL_PLACEHOLDER_M18"
+                                },
+                                "quotaInfo": {
+                                    "remainingFraction": 0.1
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        });
+
+        let snapshot = parse_antigravity_usage_snapshot(&data).expect("snapshot");
+        assert_eq!(snapshot.selected_model_label, Some("Gemini 3 Flash".into()));
+        assert_eq!(snapshot.summary.as_deref(), Some("remain 100%"));
+    }
+
+    #[test]
     fn antigravity_usage_snapshot_falls_back_to_first_model_when_unselected() {
         let data = serde_json::json!({
             "user_status": {
@@ -5668,6 +5811,103 @@ mod tests {
     }
 
     #[test]
+    fn antigravity_usage_snapshot_prefers_default_override_over_command_model_list() {
+        let data = serde_json::json!({
+            "user_status": {
+                "userStatus": {
+                    "cascadeModelConfigData": {
+                        "defaultOverrideModelConfig": {
+                            "modelOrAlias": {
+                                "model": "MODEL_PLACEHOLDER_M37"
+                            }
+                        },
+                        "clientModelConfigs": [
+                            { "label": "Gemini 3.1 Pro (High)", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M37" }, "quotaInfo": { "remainingFraction": 1.0 } },
+                            { "label": "Gemini 3 Flash", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M18" }, "quotaInfo": { "remainingFraction": 1.0 } }
+                        ]
+                    }
+                }
+            },
+            "command_model_configs": {
+                "clientModelConfigs": [
+                    { "label": "Gemini 3 Flash", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M18" } }
+                ]
+            }
+        });
+
+        let snapshot = parse_antigravity_usage_snapshot(&data).expect("snapshot");
+        assert_eq!(snapshot.selected_model_label, Some("Gemini 3.1 Pro".into()));
+        assert_eq!(snapshot.summary.as_deref(), Some("remain 100%"));
+    }
+
+    #[test]
+    fn antigravity_usage_snapshot_ignores_ambiguous_command_model_configs() {
+        let data = serde_json::json!({
+            "user_status": {
+                "userStatus": {
+                    "cascadeModelConfigData": {
+                        "defaultOverrideModelConfig": {
+                            "modelOrAlias": {
+                                "model": "MODEL_PLACEHOLDER_M37"
+                            }
+                        },
+                        "clientModelConfigs": [
+                            { "label": "Gemini 3.1 Pro (High)", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M37" }, "quotaInfo": { "remainingFraction": 1.0 } },
+                            { "label": "Gemini 3 Flash", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M18" }, "quotaInfo": { "remainingFraction": 1.0 } }
+                        ]
+                    }
+                }
+            },
+            "command_model_configs": {
+                "clientModelConfigs": [
+                    { "label": "Gemini 3 Flash", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M18" } },
+                    { "label": "Gemini 3.1 Pro (High)", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M37" } }
+                ]
+            }
+        });
+
+        let snapshot = parse_antigravity_usage_snapshot(&data).expect("snapshot");
+        assert_eq!(snapshot.selected_model_label, Some("Gemini 3.1 Pro".into()));
+        assert_eq!(snapshot.summary.as_deref(), Some("remain 100%"));
+    }
+
+    #[test]
+    fn antigravity_usage_snapshot_prefers_explicit_command_selected_model() {
+        let data = serde_json::json!({
+            "user_status": {
+                "userStatus": {
+                    "cascadeModelConfigData": {
+                        "defaultOverrideModelConfig": {
+                            "modelOrAlias": {
+                                "model": "MODEL_PLACEHOLDER_M37"
+                            }
+                        },
+                        "clientModelConfigs": [
+                            { "label": "Gemini 3.1 Pro (High)", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M37" }, "quotaInfo": { "remainingFraction": 1.0 } },
+                            { "label": "Gemini 3 Flash", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M18" }, "quotaInfo": { "remainingFraction": 0.8 } }
+                        ]
+                    }
+                }
+            },
+            "command_model_configs": {
+                "selectedModelConfig": {
+                    "modelOrAlias": {
+                        "model": "MODEL_PLACEHOLDER_M18"
+                    }
+                },
+                "clientModelConfigs": [
+                    { "label": "Gemini 3 Flash", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M18" } },
+                    { "label": "Gemini 3.1 Pro (High)", "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M37" } }
+                ]
+            }
+        });
+
+        let snapshot = parse_antigravity_usage_snapshot(&data).expect("snapshot");
+        assert_eq!(snapshot.selected_model_label, Some("Gemini 3 Flash".into()));
+        assert_eq!(snapshot.summary.as_deref(), Some("remain 80%"));
+    }
+
+    #[test]
     fn extract_antigravity_fields_include_model_and_auth_only() {
         let snapshot = AntigravityUsageSnapshot {
             summary: Some("remain 60%".into()),
@@ -5726,6 +5966,12 @@ mod tests {
         );
         assert!(!app.is_editing());
         assert!(!app.is_selecting());
+    }
+
+    #[test]
+    fn confirm_key_accepts_space_and_enter() {
+        assert!(is_confirm_key(KeyCode::Char(' ')));
+        assert!(is_confirm_key(KeyCode::Enter));
     }
 
     #[test]
