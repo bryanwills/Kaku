@@ -64,6 +64,7 @@ const NSViewLayerContentsRedrawDuringViewResize: NSInteger = 2;
 const FULLSCREEN_ENTER_HIDE_CONTENT_MS: u64 = 30;
 const FULLSCREEN_EXIT_HIDE_CONTENT_MS: u64 = 20;
 const ZOOM_HIDE_CONTENT_MS: u64 = 20;
+const FULLSCREEN_DISPLAY_CHANGE_OPENGL_PRESENT_DEFER_MS: u64 = 300;
 const MOVE_PERSIST_DELAY_SECS: f64 = 0.35;
 // Keep these accessibility strings stable. Some voice input tools match
 // TextArea semantics and descriptions heuristically to decide whether the
@@ -340,6 +341,39 @@ mod cglbits {
                 let _: () = msg_send![*self.gl_context, update];
             }
         }
+
+        fn should_defer_flush_buffer(&self, view: id, window: id) -> bool {
+            unsafe {
+                let screen: id = msg_send![window, screen];
+                if screen.is_null() {
+                    log::trace!("skip flushBuffer: NSWindow has no NSScreen");
+                    return true;
+                }
+                let is_visible: BOOL = msg_send![window, isVisible];
+                if is_visible == NO {
+                    log::trace!("skip flushBuffer: NSWindow is not visible");
+                    return true;
+                }
+                if let Some(window_view) = WindowView::get_this(&*view) {
+                    if window_view.native_fullscreen_transition_active.get()
+                        || window_view.simple_fullscreen_transition_active.get()
+                    {
+                        log::trace!("skip flushBuffer: fullscreen transition active");
+                        return true;
+                    }
+                    if let Some(until) = window_view.display_change_opengl_present_until.get() {
+                        if Instant::now() < until {
+                            log::trace!(
+                                "skip flushBuffer: deferred after fullscreen display change"
+                            );
+                            return true;
+                        }
+                        window_view.display_change_opengl_present_until.set(None);
+                    }
+                }
+            }
+            false
+        }
     }
 
     unsafe impl glium::backend::Backend for GlState {
@@ -358,7 +392,9 @@ mod cglbits {
                 if !view.is_null() {
                     let window: id = msg_send![view, window];
                     if !window.is_null() {
-                        self.gl_context.flushBuffer();
+                        if !self.should_defer_flush_buffer(view, window) {
+                            self.gl_context.flushBuffer();
+                        }
                     } else {
                         log::trace!("skip flushBuffer: NSView has no NSWindow");
                     }
@@ -1739,17 +1775,35 @@ impl WindowInner {
     /// and forces the window to recalculate screen-dependent state.
     pub(crate) fn refresh_after_display_change(&mut self) -> bool {
         if let Some(window_view) = WindowView::get_this(unsafe { &**self.view }) {
+            let transition_active = window_view.native_fullscreen_transition_active.get()
+                || window_view.simple_fullscreen_transition_active.get();
+
+            let native_fullscreen = self.is_native_fullscreen();
             // Skip triggering a resize during a fullscreen transition. The transition
             // callbacks (did_enter/exit_fullscreen) will dispatch the final resize when
             // stable. Firing an extra screen-change resize during the animation causes
             // flickering with status bar apps (e.g. sketchybar) that emit
             // NSApplicationDidChangeScreenParametersNotification as they adjust.
-            if window_view.native_fullscreen_transition_active.get()
-                || window_view.simple_fullscreen_transition_active.get()
-            {
-                return true;
-            }
             if let Ok(mut inner) = window_view.inner.try_borrow_mut() {
+                let window_id = inner.window_id;
+                let fullscreen_like = transition_active
+                    || native_fullscreen
+                    || window_view.simple_fullscreen_active.get();
+                if fullscreen_like
+                    && inner
+                        .gl_context_pair
+                        .as_ref()
+                        .is_some_and(|pair| matches!(&pair.backend, BackendImpl::Cgl(_)))
+                {
+                    arm_display_change_opengl_present_defer(
+                        window_view,
+                        window_id,
+                        FULLSCREEN_DISPLAY_CHANGE_OPENGL_PRESENT_DEFER_MS,
+                    );
+                }
+                if transition_active {
+                    return true;
+                }
                 if let Some(gl_context_pair) = inner.gl_context_pair.as_ref() {
                     log::debug!(
                         "refreshing OpenGL context for window after display change (window_id={})",
@@ -2542,12 +2596,68 @@ struct WindowView {
     simple_fullscreen_transition_active: Cell<bool>,
     /// Keep pane content hidden for a short time during fullscreen transitions.
     transition_hide_until: Cell<Option<Instant>>,
+    /// Delay CGL presents briefly after fullscreen display changes so AppKit
+    /// can rebuild the backing drawable before we call flushBuffer.
+    display_change_opengl_present_until: Cell<Option<Instant>>,
     /// Tracks native fullscreen transition state so we can stabilize resize behavior.
     native_fullscreen_transition_active: Cell<bool>,
     /// Target fullscreen state while native transition is running.
     native_fullscreen_target: Cell<Option<bool>>,
     native_fullscreen_transition_start: Cell<Option<Instant>>,
     resize_retry_scheduled: Cell<bool>,
+}
+
+fn arm_display_change_opengl_present_defer(
+    window_view: &WindowView,
+    window_id: usize,
+    duration_ms: u64,
+) {
+    let now = Instant::now();
+    let until = now + Duration::from_millis(duration_ms);
+    if window_view
+        .display_change_opengl_present_until
+        .get()
+        .is_some_and(|current| current >= until)
+    {
+        return;
+    }
+
+    window_view
+        .display_change_opengl_present_until
+        .set(Some(until));
+
+    promise::spawn::spawn(async move {
+        async_io::Timer::after(Duration::from_millis(duration_ms)).await;
+        if let Err(err) = Connection::with_window_inner(window_id, move |inner| {
+            if let Some(window_view) = WindowView::get_this(unsafe { &**inner.view }) {
+                let Some(until) = window_view.display_change_opengl_present_until.get() else {
+                    return Ok(());
+                };
+                if Instant::now() < until {
+                    return Ok(());
+                }
+                window_view.display_change_opengl_present_until.set(None);
+                if let Ok(mut state) = window_view.inner.try_borrow_mut() {
+                    state.paint_throttled = false;
+                    state.invalidated = true;
+                    state.events.dispatch(WindowEvent::NeedRepaint);
+                }
+            }
+            unsafe {
+                let _: () = msg_send![*inner.view, setNeedsDisplay: YES];
+            }
+            Ok(())
+        })
+        .await
+        {
+            log::trace!(
+                "skipping deferred display-change repaint for window {}: {}",
+                window_id,
+                err
+            );
+        }
+    })
+    .detach();
 }
 
 pub fn superclass(this: &Object) -> &'static Class {
@@ -4792,6 +4902,7 @@ impl WindowView {
             simple_fullscreen_active: Cell::new(false),
             simple_fullscreen_transition_active: Cell::new(false),
             transition_hide_until: Cell::new(None),
+            display_change_opengl_present_until: Cell::new(None),
             native_fullscreen_transition_active: Cell::new(false),
             native_fullscreen_target: Cell::new(None),
             native_fullscreen_transition_start: Cell::new(None),
