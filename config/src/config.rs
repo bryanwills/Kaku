@@ -2002,9 +2002,15 @@ pub fn default_hyperlink_rules() -> Vec<hyperlink::Rule> {
         hyperlink::Rule::new(hyperlink::GENERIC_HYPERLINK_PATTERN, "$0").unwrap(),
         // implicit mailto link
         hyperlink::Rule::new(r"\b\w+@[\w-]+(\.[\w-]+)+\b", "mailto:$0").unwrap(),
-        // File paths: must start with /, ~/, ./ or ../
-        // Supports file:line and file:line:col formats
-        hyperlink::Rule::new(r"(?:~|\.\.?)?/[^\s\)\]\}>]+", "file://$0").unwrap(),
+        // File paths: support absolute paths, common relative prefixes, and
+        // bare relative paths like `kaku/src/main.rs`.
+        // Supports file:line and file:line:col formats.
+        hyperlink::Rule::with_highlight(
+            r"(^|[\s\(\[<])((?:~|\.{1,2}|[[:alnum:]_.-]+)?/[^\s\)\]\}>]+)",
+            "file://$2",
+            2,
+        )
+        .unwrap(),
     ]
 }
 
@@ -2013,6 +2019,40 @@ fn default_harfbuzz_features() -> Vec<String> {
         .iter()
         .map(|&s| s.to_string())
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::default_hyperlink_rules;
+    use std::sync::Arc;
+    use termwiz::hyperlink::{Hyperlink, Rule, RuleMatch};
+
+    #[test]
+    fn file_hyperlink_rule_matches_bare_relative_paths() {
+        let rules = default_hyperlink_rules();
+
+        assert!(Rule::match_hyperlinks("kaku/src/kaku_theme.rs", &rules)
+            .into_iter()
+            .any(|m| m.range == (0..22)
+                && m.link == Arc::new(Hyperlink::new_implicit("file://kaku/src/kaku_theme.rs"))));
+    }
+
+    #[test]
+    fn file_hyperlink_rule_does_not_override_urls() {
+        let rules = default_hyperlink_rules();
+
+        assert_eq!(
+            Rule::match_hyperlinks("https://example.com/kaku/src/kaku_theme.rs", &rules)
+                .into_iter()
+                .next(),
+            Some(RuleMatch {
+                range: 0..42,
+                link: Arc::new(Hyperlink::new_implicit(
+                    "https://example.com/kaku/src/kaku_theme.rs",
+                )),
+            })
+        );
+    }
 }
 
 fn default_term() -> String {
