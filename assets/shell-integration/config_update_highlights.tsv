@@ -14,6 +14,7 @@
 15	Yazi now follows Kaku dark and light themes automatically, with corrected folder and file colors in both modes
 15	Kaku now refreshes managed tmux integration automatically so Shift+wheel works in local tmux full-screen apps
 15	Kaku now always loads its managed zsh integration when available, fixing shells that missed aliases and prompt setup
+15	Smart Tab now only takes over Tab inside Kaku sessions by default, so other terminals keep their own completion workflow
 15	Kaku can now follow macOS appearance automatically, so bundled dark and light themes switch with the system
 15	Bundled defaults now respect your active custom kaku.lua path and no longer override your own font settings
 15	Tab and pane close protection defaults are available in the bundled config and Settings TUI for safer multi-pane workflows
