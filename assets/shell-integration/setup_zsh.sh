@@ -1315,7 +1315,10 @@ fi
 # with "unknown terminal type 'kaku'" even though Kaku set TERMINFO_DIRS for the
 # user shell. Set KAKU_SUDO_SKIP_TERM_FIX=1 to disable this behavior.
 # Guard: only define if no existing sudo function is present.
+# If sudo is an alias, zsh expands it during function-definition parsing and
+# raises a syntax error ("defining function based on alias"). Unalias first.
 if ! typeset -f sudo > /dev/null 2>&1; then
+unalias sudo 2>/dev/null || true
 sudo() {
     if [[ -z "\${KAKU_SUDO_SKIP_TERM_FIX-}" && "\$TERM" == "kaku" ]]; then
         TERM=xterm-256color command sudo "\$@"
