@@ -787,6 +787,8 @@ struct FishConfSourceCheck {
 
 fn check_fish_conf_d_source_line(path: &Path) -> FishConfSourceCheck {
     let mut result = FishConfSourceCheck::default();
+    let mut has_kaku_init_var = false;
+    let mut sources_kaku_init_var = false;
     let content = match fs::read_to_string(path) {
         Ok(c) => c,
         Err(err) => {
@@ -804,15 +806,25 @@ fn check_fish_conf_d_source_line(path: &Path) -> FishConfSourceCheck {
         if trimmed.starts_with('#') {
             continue;
         }
-        if trimmed.contains("kaku/fish/kaku.fish")
-            && trimmed
-                .split(|c: char| c.is_whitespace())
-                .any(|token| token == "source")
-        {
+
+        if trimmed.contains("kaku/fish/kaku.fish") && contains_source_command(trimmed) {
             result.has_valid_source = true;
             break;
         }
+
+        if trimmed.contains("_kaku_fish_init") && trimmed.contains("kaku/fish/kaku.fish") {
+            has_kaku_init_var = true;
+        }
+
+        if contains_source_command(trimmed) && trimmed.contains("_kaku_fish_init") {
+            sources_kaku_init_var = true;
+        }
     }
+
+    if !result.has_valid_source && has_kaku_init_var && sources_kaku_init_var {
+        result.has_valid_source = true;
+    }
+
     result
 }
 
@@ -1238,6 +1250,26 @@ mod tests {
         fs::write(&path, "# source ~/.config/kaku/fish/kaku.fish\n").expect("write");
         let check = check_fish_conf_d_source_line(&path);
         assert!(!check.has_valid_source);
+    }
+
+    #[test]
+    fn fish_conf_d_with_managed_variable_source_is_detected() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let path = dir.path().join("kaku.fish");
+        fs::write(
+            &path,
+            r#"# Kaku shell integration -- managed. Remove with: kaku reset
+set -l _kaku_fish_init "$HOME/.config/kaku/fish/kaku.fish"
+if test -f $_kaku_fish_init
+    source $_kaku_fish_init
+end
+"#,
+        )
+        .expect("write");
+        let check = check_fish_conf_d_source_line(&path);
+        assert!(check.has_valid_source);
+        assert!(!check.missing_file);
+        assert!(check.read_error.is_none());
     }
 
     #[test]
