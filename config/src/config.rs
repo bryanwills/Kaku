@@ -896,6 +896,10 @@ pub struct Config {
     #[dynamic(default)]
     pub bell_dock_badge: bool,
 
+    /// Restore the last working directory when opening new tabs or windows
+    #[dynamic(default = "default_true")]
+    pub remember_last_cwd: bool,
+
     #[dynamic(default)]
     pub canonicalize_pasted_newlines: Option<NewlineCanon>,
 
