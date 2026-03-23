@@ -370,11 +370,18 @@ impl crate::TermWindow {
                 }
 
                 if draw_basic {
+                    let (cursor_top, cursor_bottom) = match shape {
+                        CursorShape::BlinkingBlock | CursorShape::SteadyBlock => {
+                            let y = params.render_metrics.line_height_y_adjust;
+                            (pos_y + y, pos_y + cell_height - y)
+                        }
+                        _ => (pos_y, pos_y + cell_height),
+                    };
                     quad.set_position(
                         pos_x,
-                        pos_y,
+                        cursor_top,
                         pos_x + (cursor_range.end - cursor_range.start) as f32 * cell_width,
-                        pos_y + cell_height,
+                        cursor_bottom,
                     );
                     quad.set_texture(
                         gl_state

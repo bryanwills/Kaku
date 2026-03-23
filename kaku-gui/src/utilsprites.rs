@@ -18,6 +18,10 @@ pub struct RenderMetrics {
     pub underline_height: IntPixelLength,
     pub strike_row: IntPixelLength,
     pub cell_size: Size,
+    /// Extra vertical padding (in pixels) added above and below the core cell
+    /// area when line_height > 1.0. The block cursor is inset by this amount
+    /// on each side so it does not bleed into the inter-line spacing.
+    pub line_height_y_adjust: f32,
 }
 
 impl RenderMetrics {
@@ -43,6 +47,7 @@ impl RenderMetrics {
             strike_row,
             cell_size: Size::new(cell_width as isize, cell_height as isize),
             underline_height,
+            line_height_y_adjust: 0.0,
         }
     }
 
@@ -62,6 +67,7 @@ impl RenderMetrics {
             underline_height: self.underline_height,
             strike_row: self.strike_row,
             cell_size: size,
+            line_height_y_adjust: 0.0,
         }
     }
 
@@ -146,6 +152,7 @@ impl RenderMetrics {
             strike_row,
             cell_size: Size::new(cell_width as isize, cell_height as isize),
             underline_height,
+            line_height_y_adjust: line_height_y_adjust as f32,
         })
     }
 }
@@ -199,6 +206,7 @@ mod tests {
             underline_height: 1,
             strike_row: 0,
             cell_size: Size::new(10, 20),
+            line_height_y_adjust: 0.0,
         };
 
         assert_eq!(metrics.default_cursor_top_inset(), 5);
@@ -214,6 +222,7 @@ mod tests {
             underline_height: 1,
             strike_row: 0,
             cell_size: Size::new(10, 20),
+            line_height_y_adjust: 0.0,
         };
 
         assert_eq!(metrics.default_cursor_top_inset(), 4);

@@ -5166,6 +5166,7 @@ impl GlyphCache {
                 underline_height: *underline_height,
                 strike_row: 0,
                 cell_size: cell_size.clone(),
+                line_height_y_adjust: 0.0,
             },
             _ => render_metrics.clone(),
         };
