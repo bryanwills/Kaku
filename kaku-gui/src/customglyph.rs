@@ -5167,6 +5167,7 @@ impl GlyphCache {
                 strike_row: 0,
                 cell_size: cell_size.clone(),
                 line_height_y_adjust: 0.0,
+                natural_cell_height: cell_size.height,
             },
             _ => render_metrics.clone(),
         };

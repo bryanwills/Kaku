@@ -22,6 +22,9 @@ pub struct RenderMetrics {
     /// area when line_height > 1.0. The block cursor is inset by this amount
     /// on each side so it does not bleed into the inter-line spacing.
     pub line_height_y_adjust: f32,
+    /// Cell height before line_height scaling. Used to render custom block
+    /// glyphs at the correct aspect ratio when line_height != 1.0.
+    pub natural_cell_height: isize,
 }
 
 impl RenderMetrics {
@@ -48,6 +51,7 @@ impl RenderMetrics {
             cell_size: Size::new(cell_width as isize, cell_height as isize),
             underline_height,
             line_height_y_adjust: 0.0,
+            natural_cell_height: cell_height as isize,
         }
     }
 
@@ -68,6 +72,7 @@ impl RenderMetrics {
             strike_row: self.strike_row,
             cell_size: size,
             line_height_y_adjust: 0.0,
+            natural_cell_height: self.cell_size.height,
         }
     }
 
@@ -153,7 +158,19 @@ impl RenderMetrics {
             cell_size: Size::new(cell_width as isize, cell_height as isize),
             underline_height,
             line_height_y_adjust: line_height_y_adjust as f32,
+            natural_cell_height: metrics.cell_height.get().ceil() as isize,
         })
+    }
+
+    /// Returns metrics with the natural (pre-line_height) cell height,
+    /// for rendering custom block glyphs at the correct aspect ratio.
+    pub fn block_glyph_metrics(&self) -> Self {
+        if self.line_height_y_adjust <= 0.0 {
+            return *self;
+        }
+        let mut m = *self;
+        m.cell_size.height = self.natural_cell_height;
+        m
     }
 }
 
@@ -207,6 +224,7 @@ mod tests {
             strike_row: 0,
             cell_size: Size::new(10, 20),
             line_height_y_adjust: 0.0,
+            natural_cell_height: 20,
         };
 
         assert_eq!(metrics.default_cursor_top_inset(), 5);
@@ -223,6 +241,7 @@ mod tests {
             strike_row: 0,
             cell_size: Size::new(10, 20),
             line_height_y_adjust: 0.0,
+            natural_cell_height: 20,
         };
 
         assert_eq!(metrics.default_cursor_top_inset(), 4);

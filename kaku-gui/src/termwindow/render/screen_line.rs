@@ -17,6 +17,25 @@ use wezterm_bidi::Direction;
 use wezterm_term::color::ColorAttribute;
 use wezterm_term::CellAttributes;
 
+fn block_cursor_vertical_bounds(
+    pos_y: f32,
+    cell_height: f32,
+    line_height_y_adjust: f32,
+) -> (f32, f32) {
+    // Negative adjust values happen when line_height < 1.0; that should not
+    // expand the block cursor beyond the current cell bounds.
+    let y = line_height_y_adjust.clamp(0.0, cell_height / 2.0);
+    (pos_y + y, pos_y + cell_height - y)
+}
+
+fn uses_full_cell_block_cursor(render_shape: CursorShape, effective_shape: CursorShape) -> bool {
+    render_shape == CursorShape::Default
+        && matches!(
+            effective_shape,
+            CursorShape::BlinkingBlock | CursorShape::SteadyBlock
+        )
+}
+
 impl crate::TermWindow {
     /// "Render" a line of the terminal screen into the vertex buffer.
     /// This is nominally a matter of setting the fg/bg color and the
@@ -323,6 +342,12 @@ impl crate::TermWindow {
                 + (phys(params.cursor.x, num_cols, direction) as f32 * cell_width);
 
             if let Some(shape) = cursor_shape {
+                let effective_cursor_shape = params
+                    .config
+                    .default_cursor_style
+                    .effective_shape(params.cursor.shape);
+                let full_cell_block_cursor =
+                    uses_full_cell_block_cursor(shape, effective_cursor_shape);
                 let cursor_layer = match shape {
                     CursorShape::BlinkingBar | CursorShape::SteadyBar => 2,
                     _ => 0,
@@ -372,8 +397,18 @@ impl crate::TermWindow {
                 if draw_basic {
                     let (cursor_top, cursor_bottom) = match shape {
                         CursorShape::BlinkingBlock | CursorShape::SteadyBlock => {
-                            let y = params.render_metrics.line_height_y_adjust;
-                            (pos_y + y, pos_y + cell_height - y)
+                            block_cursor_vertical_bounds(
+                                pos_y,
+                                cell_height,
+                                params.render_metrics.line_height_y_adjust,
+                            )
+                        }
+                        CursorShape::Default if full_cell_block_cursor => {
+                            block_cursor_vertical_bounds(
+                                pos_y,
+                                cell_height,
+                                params.render_metrics.line_height_y_adjust,
+                            )
                         }
                         _ => (pos_y, pos_y + cell_height),
                     };
@@ -383,17 +418,21 @@ impl crate::TermWindow {
                         pos_x + (cursor_range.end - cursor_range.start) as f32 * cell_width,
                         cursor_bottom,
                     );
-                    quad.set_texture(
-                        gl_state
-                            .glyph_cache
-                            .borrow_mut()
-                            .cursor_sprite(
-                                Some(shape),
-                                &params.render_metrics,
-                                (cursor_range.end - cursor_range.start) as u8,
-                            )?
-                            .texture_coords(),
-                    );
+                    if full_cell_block_cursor {
+                        quad.set_texture(params.filled_box);
+                    } else {
+                        quad.set_texture(
+                            gl_state
+                                .glyph_cache
+                                .borrow_mut()
+                                .cursor_sprite(
+                                    Some(shape),
+                                    &params.render_metrics,
+                                    (cursor_range.end - cursor_range.start) as u8,
+                                )?
+                                .texture_coords(),
+                        );
+                    }
                 }
 
                 quad.set_fg_color(cursor_border_color);
@@ -638,7 +677,10 @@ impl crate::TermWindow {
                             quad.set_fg_color(glyph_color);
                             quad.set_alt_color_and_mix_value(fg_color_alt, fg_color_mix);
                             quad.set_texture(texture_rect);
-                            quad.set_hsv(if glyph.brightness_adjust != 1.0 {
+                            let glyph_hsv = if cluster.attrs.intensity()
+                                != wezterm_term::Intensity::Half
+                                && glyph.brightness_adjust != 1.0
+                            {
                                 let hsv = hsv.unwrap_or_else(|| HsbTransform::default());
                                 Some(HsbTransform {
                                     brightness: hsv.brightness * glyph.brightness_adjust,
@@ -646,7 +688,8 @@ impl crate::TermWindow {
                                 })
                             } else {
                                 hsv
-                            });
+                            };
+                            quad.set_hsv(glyph_hsv);
                             quad.set_has_color(glyph.has_color);
                         }
                     }
@@ -888,5 +931,35 @@ impl crate::TermWindow {
         }
 
         Ok((shaped, invalidate_on_hover_change))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{block_cursor_vertical_bounds, uses_full_cell_block_cursor};
+    use termwiz::surface::CursorShape;
+
+    #[test]
+    fn block_cursor_does_not_expand_when_adjust_is_negative() {
+        let (top, bottom) = block_cursor_vertical_bounds(10.0, 20.0, -5.0);
+        assert_eq!((top, bottom), (10.0, 30.0));
+    }
+
+    #[test]
+    fn block_cursor_insets_when_adjust_is_positive() {
+        let (top, bottom) = block_cursor_vertical_bounds(10.0, 20.0, 3.0);
+        assert_eq!((top, bottom), (13.0, 27.0));
+    }
+
+    #[test]
+    fn remapped_default_shape_keeps_full_cell_for_block_cursor() {
+        assert!(uses_full_cell_block_cursor(
+            CursorShape::Default,
+            CursorShape::SteadyBlock,
+        ));
+        assert!(!uses_full_cell_block_cursor(
+            CursorShape::Default,
+            CursorShape::SteadyBar,
+        ));
     }
 }

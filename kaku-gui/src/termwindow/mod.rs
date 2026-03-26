@@ -348,6 +348,8 @@ struct RenderMetricsDiskEntry {
     cell_height: isize,
     #[serde(default)]
     line_height_y_adjust: f32,
+    #[serde(default)]
+    natural_cell_height: isize,
 }
 
 fn render_metrics_cache_file() -> PathBuf {
@@ -401,6 +403,11 @@ fn load_render_metrics_from_disk(key: RenderMetricsCacheKey) -> Option<RenderMet
         strike_row: entry.strike_row,
         cell_size: Size::new(entry.cell_width, entry.cell_height),
         line_height_y_adjust: entry.line_height_y_adjust,
+        natural_cell_height: if entry.natural_cell_height > 0 {
+            entry.natural_cell_height
+        } else {
+            entry.cell_height
+        },
     })
 }
 
@@ -427,6 +434,7 @@ fn persist_render_metrics_to_disk(key: RenderMetricsCacheKey, metrics: RenderMet
         cell_width: metrics.cell_size.width,
         cell_height: metrics.cell_size.height,
         line_height_y_adjust: metrics.line_height_y_adjust,
+        natural_cell_height: metrics.natural_cell_height,
     };
 
     match serde_json::to_vec(&entry) {
