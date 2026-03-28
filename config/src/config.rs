@@ -985,7 +985,7 @@ pub struct RemoteConfig {
 impl_lua_conversion_dynamic!(RemoteConfig);
 
 fn default_remote_enabled() -> bool {
-    true
+    false
 }
 
 fn default_remote_port() -> u16 {
@@ -1007,7 +1007,7 @@ fn default_remote_tunnel() -> bool {
 impl Default for RemoteConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             port: default_remote_port(),
             bind: default_remote_bind(),
             tunnel: default_remote_tunnel(),

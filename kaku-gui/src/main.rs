@@ -349,6 +349,7 @@ async fn async_run_terminal_gui(
         log::warn!("{:#}", err);
     }
 
+    #[cfg(feature = "remote")]
     kaku_remote::start();
 
     let default_domain_is_local = Mux::get().default_domain().domain_name() == "local";

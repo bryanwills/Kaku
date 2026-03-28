@@ -25,6 +25,7 @@ vendored-fonts = [
 ]
 dhat-heap = ["dhat"]    # if you are doing heap profiling
 dhat-ad-hoc = ["dhat"]  # if you are doing ad hoc profiling
+remote = ["dep:kaku-remote"]
 
 [build-dependencies]
 anyhow.workspace = true
@@ -62,7 +63,7 @@ log.workspace = true
 luahelper.workspace = true
 metrics.workspace = true
 mlua = {workspace=true, features=["send", "serialize"]}
-kaku-remote.workspace = true
+kaku-remote = { workspace = true, optional = true }
 mux-lua.workspace = true
 mux.workspace = true
 nucleo-matcher.workspace = true

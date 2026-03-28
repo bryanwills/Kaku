@@ -162,6 +162,7 @@ enum SubCommand {
     )]
     SetCwd(SetCwdCommand),
 
+    #[cfg(feature = "remote")]
     #[command(name = "remote", about = "Show QR code to connect Kaku iOS app")]
     Remote,
 
@@ -328,6 +329,7 @@ fn run() -> anyhow::Result<()> {
             env_bootstrap::bootstrap();
             cli::run_cli(&opts, cli)
         }
+        #[cfg(feature = "remote")]
         SubCommand::Remote => {
             let state = kaku_remote::read_state()?;
             let output = if let Some(relay) = &state.tunnel_relay {
@@ -627,6 +629,7 @@ fn resolve_gui_executable(exe_name: &str) -> anyhow::Result<PathBuf> {
         .ok_or_else(|| anyhow!("unable to resolve GUI executable path"))
 }
 
+#[cfg(feature = "remote")]
 fn lan_ip() -> Option<String> {
     use std::net::UdpSocket;
     let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
