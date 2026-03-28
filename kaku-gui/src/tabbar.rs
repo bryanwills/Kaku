@@ -156,10 +156,14 @@ fn compute_tab_title(
         Some(title) => title,
         None => {
             if let Some(pane) = &tab.active_pane {
-                let title = if tab.tab_title.is_empty() {
-                    pane.title.clone()
-                } else {
+                let title = if !tab.tab_title.is_empty() {
                     tab.tab_title.clone()
+                } else if let Some(path_title) = pane_cwd_title(pane) {
+                    path_title
+                } else if let Some(ssh_host) = ssh_destination_for_pane(pane) {
+                    ssh_host
+                } else {
+                    "no cwd".to_string()
                 };
                 build_default_title(tab, config, &title, true, false)
             } else {
@@ -212,7 +216,7 @@ pub fn compute_tab_plain_title(tab: &TabInformation) -> String {
         if let Some(ssh_host) = ssh_destination_for_pane(pane) {
             return ssh_host;
         }
-        return pane.title.clone();
+        return "no cwd".to_string();
     }
 
     "no pane".to_string()

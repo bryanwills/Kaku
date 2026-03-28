@@ -2443,19 +2443,6 @@ local function tab_path_parts(tab)
   return parent, current
 end
 
-local function pane_process_tab_title(pane)
-  if not pane or is_shell_foreground(pane) then
-    return ''
-  end
-
-  local proc_name = basename(pane_foreground_process_name(pane) or '')
-  if proc_name == '' or proc_name:lower() == 'ssh' then
-    return ''
-  end
-
-  return proc_name
-end
-
 -- ===== Kaku Palette =====
 local KAKU_BLACK = '#15141b'
 local KAKU_ANSI_BLACK = '#110f18'
@@ -2543,9 +2530,6 @@ wezterm.on('format-tab-title', function(tab, tabs, _, effective_config, hover, m
   -- Use user-set tab title if available
   local text = tab.tab_title or ''
   local active_pane = tab.active_pane
-  if text == '' and active_pane then
-    text = pane_process_tab_title(active_pane)
-  end
   if text == '' then
     local parent, current = tab_path_parts(tab)
     local basename_only = effective_config and effective_config.tab_title_show_basename_only
@@ -2556,8 +2540,10 @@ wezterm.on('format-tab-title', function(tab, tabs, _, effective_config, hover, m
   end
 
   if text == '' and active_pane then
-    text = resolve_remote_target_from_pane(active_pane)
-      or trim_surrounding_whitespace(active_pane.title or '')
+    text = resolve_remote_target_from_pane(active_pane) or ''
+  end
+  if text == '' then
+    text = 'no cwd'
   end
   if active_pane and active_pane.is_zoomed then
     text = text .. ' [Z]'
