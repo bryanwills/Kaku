@@ -2514,6 +2514,32 @@ local function clear_tab_bells(tab)
   end
 end
 
+local function tab_display_title(tab, effective_config)
+  local active_pane = tab and tab.active_pane or nil
+  local text = tab and tab.tab_title or ''
+
+  if text == '' and tab then
+    local parent, current = tab_path_parts(tab)
+    local basename_only = effective_config and effective_config.tab_title_show_basename_only
+    text = current
+    if not basename_only and parent ~= '' and current ~= '' then
+      text = parent .. '/' .. current
+    end
+  end
+
+  if text == '' and active_pane then
+    text = resolve_remote_target_from_pane(active_pane) or ''
+  end
+  if text == '' and active_pane then
+    text = active_pane.title or ''
+  end
+  if text == '' then
+    text = 'no cwd'
+  end
+
+  return text, active_pane
+end
+
 wezterm.on('format-tab-title', function(tab, tabs, _, effective_config, hover, max_width)
   -- Evict stale cache only on the first tab to avoid O(n²) across the render cycle
   if tab.tab_index == 0 then
@@ -2527,24 +2553,7 @@ wezterm.on('format-tab-title', function(tab, tabs, _, effective_config, hover, m
     evict_stale_bell_panes(live_pane_ids)
   end
 
-  -- Use user-set tab title if available
-  local text = tab.tab_title or ''
-  local active_pane = tab.active_pane
-  if text == '' then
-    local parent, current = tab_path_parts(tab)
-    local basename_only = effective_config and effective_config.tab_title_show_basename_only
-    text = current
-    if not basename_only and parent ~= '' and current ~= '' then
-      text = parent .. '/' .. current
-    end
-  end
-
-  if text == '' and active_pane then
-    text = resolve_remote_target_from_pane(active_pane) or ''
-  end
-  if text == '' then
-    text = 'no cwd'
-  end
+  local text, active_pane = tab_display_title(tab, effective_config)
   if active_pane and active_pane.is_zoomed then
     text = text .. ' [Z]'
   end
@@ -2593,6 +2602,44 @@ wezterm.on('format-tab-title', function(tab, tabs, _, effective_config, hover, m
     { Foreground = { Color = fg } },
     { Text = ' ' .. text .. ' ' },
   }
+end)
+
+wezterm.on('format-window-title', function(tab, pane, tabs, _, effective_config)
+  local active_tab = tab
+  if not active_tab and type(tabs) == 'table' then
+    for _, candidate in ipairs(tabs) do
+      if candidate.is_active then
+        active_tab = candidate
+        break
+      end
+    end
+  end
+
+  local text = ''
+  local active_pane = pane or (active_tab and active_tab.active_pane) or nil
+  if active_tab then
+    text, active_pane = tab_display_title(active_tab, effective_config)
+  elseif active_pane then
+    text = active_pane.title or ''
+  end
+
+  if text == '' then
+    text = 'no cwd'
+  end
+  if active_pane and active_pane.is_zoomed and not text:match(' %[Z%]$') then
+    text = text .. ' [Z]'
+  end
+
+  local tab_count = type(tabs) == 'table' and #tabs or 0
+  if tab_count > 1 and active_tab and active_tab.tab_index ~= nil then
+    return string.format('[%d/%d] %s', active_tab.tab_index + 1, tab_count, text)
+  end
+
+  if effective_config and effective_config.hide_tab_bar_if_only_one_tab and tab_count <= 1 then
+    return text
+  end
+
+  return text
 end)
 
 wezterm.on('window-resized', function(window, _)

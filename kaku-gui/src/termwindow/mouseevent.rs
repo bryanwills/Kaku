@@ -1,17 +1,17 @@
 use crate::tabbar::TabBarItem;
 use crate::termwindow::tab_rename::TabRenameModal;
 use crate::termwindow::{
-    GuiWin, MouseCapture, PositionedSplit, ScrollHit, TermWindowNotif, UIItem, UIItemType, TMB,
+    GuiWin, MouseCapture, PositionedSplit, ScrollHit, TMB, TermWindowNotif, UIItem, UIItemType,
 };
 use ::window::{
     MouseButtons as WMB, MouseCursor, MouseEvent, MouseEventKind as WMEK, MousePress, WindowOps,
     WindowState,
 };
-use config::keyassignment::{KeyAssignment, MouseEventTrigger, SpawnTabDomain};
 use config::MouseEventAltScreen;
+use config::keyassignment::{KeyAssignment, MouseEventTrigger, SpawnTabDomain};
+use mux::Mux;
 use mux::pane::{CachePolicy, Pane, WithPaneLines};
 use mux::tab::SplitDirection;
-use mux::Mux;
 use mux_lua::MuxPane;
 use std::convert::TryInto;
 use std::ops::Sub;
@@ -70,6 +70,15 @@ fn should_preserve_tmux_bypass_reporting(
         && mouse_grabbed
         && in_tmux_process_tree
         && modifiers.contains(bypass_modifiers)
+}
+
+fn should_suppress_wheel_during_terminal_selection(
+    capture: Option<&super::MouseCapture>,
+    current_mouse_buttons: &[MousePress],
+    mouse_buttons: WMB,
+) -> bool {
+    matches!(capture, Some(super::MouseCapture::TerminalPane(_)))
+        && (current_mouse_buttons.contains(&MousePress::Left) || mouse_buttons == WMB::LEFT)
 }
 
 impl super::TermWindow {
@@ -225,6 +234,17 @@ impl super::TermWindow {
         // Mouse interaction should cancel any synthetic prompt-selection state
         // tracked from keyboard shortcuts (Cmd+A/Shift+Arrow, etc).
         self.clear_line_editor_selection();
+
+        if matches!(event.kind, WMEK::VertWheel(_) | WMEK::HorzWheel(_))
+            && should_suppress_wheel_during_terminal_selection(
+                self.current_mouse_capture.as_ref(),
+                &self.current_mouse_buttons,
+                event.mouse_buttons,
+            )
+        {
+            log::trace!("ignoring wheel event during terminal selection drag");
+            return;
+        }
 
         let border = self.get_os_border();
 
@@ -1551,12 +1571,12 @@ fn mouse_press_to_tmb(press: &MousePress) -> TMB {
 #[cfg(test)]
 mod tests {
     use super::{
-        mouse_dispatch_target, should_preserve_tmux_bypass_reporting, should_zoom_title_area,
-        MouseDispatchTarget,
+        MouseDispatchTarget, mouse_dispatch_target, should_preserve_tmux_bypass_reporting,
+        should_suppress_wheel_during_terminal_selection, should_zoom_title_area,
     };
     use crate::termwindow::MouseCapture;
     use mux::pane::PaneId;
-    use window::{Modifiers, WindowDecorations};
+    use window::{Modifiers, MouseButtons, MousePress, WindowDecorations};
 
     #[test]
     fn terminal_capture_keeps_release_routed_to_terminal() {
@@ -1620,6 +1640,36 @@ mod tests {
             true,
             false,
             true,
+        ));
+    }
+
+    #[test]
+    fn suppresses_wheel_when_terminal_selection_is_active() {
+        let buttons = vec![MousePress::Left];
+        assert!(should_suppress_wheel_during_terminal_selection(
+            Some(&MouseCapture::TerminalPane(PaneId::new(1))),
+            &buttons,
+            MouseButtons::LEFT,
+        ));
+    }
+
+    #[test]
+    fn does_not_suppress_wheel_without_left_button_selection() {
+        let buttons = vec![MousePress::Right];
+        assert!(!should_suppress_wheel_during_terminal_selection(
+            Some(&MouseCapture::TerminalPane(PaneId::new(1))),
+            &buttons,
+            MouseButtons::RIGHT,
+        ));
+    }
+
+    #[test]
+    fn does_not_suppress_wheel_for_ui_capture() {
+        let buttons = vec![MousePress::Left];
+        assert!(!should_suppress_wheel_during_terminal_selection(
+            Some(&MouseCapture::UI),
+            &buttons,
+            MouseButtons::LEFT,
         ));
     }
 }
