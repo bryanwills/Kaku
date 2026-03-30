@@ -449,51 +449,58 @@ async fn async_run_terminal_gui(
 }
 
 #[derive(Debug)]
-#[cfg_attr(target_os = "macos", allow(dead_code))]
 enum Publish {
     TryPathOrPublish(PathBuf),
     NoConnectNoPublish,
     NoConnectButPublish,
 }
 
+fn should_try_existing_gui(
+    mux_default_domain: &str,
+    config_default_domain: Option<&str>,
+    always_new_process: bool,
+    config_overridden: bool,
+) -> bool {
+    if mux_default_domain != config_default_domain.unwrap_or("local") {
+        return false;
+    }
+
+    if always_new_process {
+        return false;
+    }
+
+    if config_overridden {
+        return false;
+    }
+
+    true
+}
+
+fn should_spawn_in_current_window(new_tab: bool, prefer_to_spawn_tabs: bool) -> bool {
+    new_tab || prefer_to_spawn_tabs
+}
+
 impl Publish {
     pub fn resolve(mux: &Arc<Mux>, config: &ConfigHandle, always_new_process: bool) -> Self {
-        #[cfg(target_os = "macos")]
-        {
-            // macOS launch paths can retain stale gui-sock symlinks briefly
-            // around app relaunch, which makes single-instance handoff add
-            // noticeable startup latency. Prefer predictable fast startup.
-            let _ = mux;
-            let _ = config;
-            let _ = always_new_process;
-            return Self::NoConnectButPublish;
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            if mux.default_domain().domain_name()
-                != config.default_domain.as_deref().unwrap_or("local")
-            {
-                return Self::NoConnectNoPublish;
-            }
-
-            if always_new_process {
-                return Self::NoConnectNoPublish;
-            }
-
+        if !should_try_existing_gui(
+            mux.default_domain().domain_name(),
+            config.default_domain.as_deref(),
+            always_new_process,
+            config::is_config_overridden(),
+        ) {
             if config::is_config_overridden() {
                 // They're using a specific config file: assume that it is
                 // different from the running gui
                 log::trace!("skip existing gui: config is different");
-                return Self::NoConnectNoPublish;
             }
+            return Self::NoConnectNoPublish;
+        }
 
-            return match wezterm_client::discovery::resolve_gui_sock_path(
-                &crate::termwindow::get_window_class(),
-            ) {
-                Ok(path) => Self::TryPathOrPublish(path),
-                Err(_) => Self::NoConnectButPublish,
-            };
+        match wezterm_client::discovery::resolve_gui_sock_path(
+            &crate::termwindow::get_window_class(),
+        ) {
+            Ok(path) => Self::TryPathOrPublish(path),
+            Err(_) => Self::NoConnectButPublish,
         }
     }
 
@@ -559,12 +566,37 @@ impl Publish {
                             );
                         }
 
-                        // Keep the cross-process spawn path minimal and robust:
-                        // send a single spawn request and let the running GUI
-                        // place it using its default behavior.
-                        let _ = new_tab;
-                        let _ = config;
-                        let window_id = None;
+                        let window_id = if should_spawn_in_current_window(
+                            new_tab,
+                            config.prefer_to_spawn_tabs,
+                        ) {
+                            if let Ok(pane_id) = client.resolve_pane_id(None).await {
+                                let panes = client.list_panes().await?;
+
+                                let mut window_id = None;
+                                'outer: for tabroot in panes.tabs {
+                                    let mut cursor = tabroot.into_tree().cursor();
+
+                                    loop {
+                                        if let Some(entry) = cursor.leaf_mut() {
+                                            if entry.pane_id == pane_id {
+                                                window_id.replace(entry.window_id);
+                                                break 'outer;
+                                            }
+                                        }
+                                        match cursor.preorder_next() {
+                                            Ok(c) => cursor = c,
+                                            Err(_) => break,
+                                        }
+                                    }
+                                }
+                                window_id
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
 
                         client
                             .spawn_v2(codec::SpawnV2 {
@@ -965,5 +997,45 @@ fn run() -> anyhow::Result<()> {
             res
         }
         SubCommand::BlockingStart(_) => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{should_spawn_in_current_window, should_try_existing_gui};
+
+    #[test]
+    fn existing_gui_handoff_requires_matching_default_domain() {
+        assert!(should_try_existing_gui("local", None, false, false));
+        assert!(should_try_existing_gui(
+            "local",
+            Some("local"),
+            false,
+            false
+        ));
+        assert!(!should_try_existing_gui("ssh", Some("local"), false, false));
+    }
+
+    #[test]
+    fn existing_gui_handoff_respects_new_process_and_config_override() {
+        assert!(!should_try_existing_gui(
+            "local",
+            Some("local"),
+            true,
+            false
+        ));
+        assert!(!should_try_existing_gui(
+            "local",
+            Some("local"),
+            false,
+            true
+        ));
+    }
+
+    #[test]
+    fn current_window_spawning_respects_new_tab_preferences() {
+        assert!(should_spawn_in_current_window(true, false));
+        assert!(should_spawn_in_current_window(false, true));
+        assert!(!should_spawn_in_current_window(false, false));
     }
 }
