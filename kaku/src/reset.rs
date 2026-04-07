@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use clap::Parser;
 use std::io::{self, IsTerminal, Write};
 use std::os::unix::process::CommandExt;
@@ -778,7 +778,7 @@ mod imp {
     #[cfg(test)]
     mod tests {
         use super::{
-            KAKU_TMUX_SOURCE_PATTERN, is_active_kaku_tmux_source_line, strip_legacy_inline_block,
+            is_active_kaku_tmux_source_line, strip_legacy_inline_block, KAKU_TMUX_SOURCE_PATTERN,
         };
 
         #[test]

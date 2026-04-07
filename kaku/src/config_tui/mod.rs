@@ -3,13 +3,13 @@ mod ui;
 use crate::assistant_config;
 use crate::utils::open_path_in_editor;
 use anyhow::Context;
-use crossterm::ExecutableCommand;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
-use ratatui::Terminal;
+use crossterm::ExecutableCommand;
 use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
 use std::convert::TryFrom;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -1432,8 +1432,8 @@ fn signal_config_changed() {
 #[cfg(test)]
 mod tests {
     use super::{
-        App, KAKU_AUTO_COLOR_SCHEME_EXPR, Mode, NormalModeAction, ensure_editable_config_exists,
-        normal_mode_action,
+        ensure_editable_config_exists, normal_mode_action, App, Mode, NormalModeAction,
+        KAKU_AUTO_COLOR_SCHEME_EXPR,
     };
     use crossterm::event::KeyCode;
     use std::path::PathBuf;

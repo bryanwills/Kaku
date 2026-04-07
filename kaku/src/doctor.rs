@@ -1,6 +1,6 @@
 //! Doctor command for diagnosing shell integration, environment, and runtime issues.
 
-use crate::shell::{ShellKind, detect_shell_kind};
+use crate::shell::{detect_shell_kind, ShellKind};
 use clap::Parser;
 use std::fs;
 use std::io::{self, ErrorKind, IsTerminal, Write};
