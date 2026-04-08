@@ -344,6 +344,12 @@ fn summarize_bell_tokens(tokens: &[&str]) -> Option<String> {
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_else(|| token.to_string());
 
+        // Skip decorative symbols (e.g. ✻ from Claude Code pane titles)
+        if !command.chars().any(|c| c.is_alphanumeric()) {
+            idx += 1;
+            continue;
+        }
+
         let command_lower = command.to_ascii_lowercase();
         let include_subcommand = matches!(
             command_lower.as_str(),
@@ -5851,6 +5857,22 @@ mod tests {
         assert_eq!(
             bell_notification_message(Some("docker compose up -d"), None, "kaku", None),
             "Task complete: docker compose up"
+        );
+    }
+
+    #[test]
+    fn bell_notification_message_skips_decorative_symbols_in_title() {
+        assert_eq!(
+            bell_notification_message(None, None, "\u{273B} claude", None),
+            "Task complete: claude"
+        );
+    }
+
+    #[test]
+    fn bell_notification_message_falls_back_when_title_is_only_symbols() {
+        assert_eq!(
+            bell_notification_message(None, None, "\u{273B}", None),
+            "Background task complete"
         );
     }
 }

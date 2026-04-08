@@ -2738,15 +2738,18 @@ wezterm.on('format-tab-title', function(tab, tabs, _, effective_config, hover, m
     has_bell = false
   end
 
-  -- Bell-based prefix indicator: show a small dot before the title when a BEL
-  -- was received, and honor the standard bell_tab_indicator toggle.
+  -- Bell indicator: show a small dot after the title when a BEL was received,
+  -- and honor the standard bell_tab_indicator toggle.
   if has_bell and effective_config.bell_tab_indicator ~= false then
+    local tab_bg = tab_bar_colors and tab_bar_colors.background
+    local is_light = tab_bg == '#FFFCF0' or tab_bg == '#fffcf0'
+    local dot_color = is_light and '#AD8301' or KAKU_ORANGE
     return {
       { Attribute = { Intensity = intensity } },
-      { Foreground = { Color = KAKU_ORANGE } },
-      { Text = ' ● ' },
       { Foreground = { Color = fg } },
-      { Text = text .. ' ' },
+      { Text = ' ' .. text },
+      { Foreground = { Color = dot_color } },
+      { Text = ' \u{2022} ' },
     }
   end
 
