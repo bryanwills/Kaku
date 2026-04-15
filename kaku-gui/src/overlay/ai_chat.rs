@@ -2407,7 +2407,7 @@ fn render_chat(term: &mut TermWizTerminal, app: &App) -> termwiz::Result<()> {
         if app.is_streaming || matches!(app.model_fetch, ModelFetch::Loading) {
             format!(" {}", app.spinner_char())
         } else {
-            "  ".to_string() // same visual width: 2 spaces = space + spinner (1-col char)
+            " •".to_string()
         },
         model_display
     );
@@ -2574,12 +2574,16 @@ fn render_chat(term: &mut TermWizTerminal, app: &App) -> termwiz::Result<()> {
         changes.push(Change::AllAttributes(pal.border_dim_cell()));
         changes.push(Change::Text("│".to_string()));
 
-        let cursor_byte = char_to_byte_pos(&app.input, app.input_cursor);
-        let cursor_col = (1
-            + unicode_column_width(prompt, None)
-            + unicode_column_width(&app.input[..cursor_byte], None))
-        .min(cols.saturating_sub(2));
-        Some((cursor_col, input_row))
+        if app.is_streaming {
+            None // hide cursor while AI is responding
+        } else {
+            let cursor_byte = char_to_byte_pos(&app.input, app.input_cursor);
+            let cursor_col = (1
+                + unicode_column_width(prompt, None)
+                + unicode_column_width(&app.input[..cursor_byte], None))
+            .min(cols.saturating_sub(2));
+            Some((cursor_col, input_row))
+        }
     };
 
     // 6. Bottom border.
@@ -3246,15 +3250,16 @@ fn shell_command_requires_approval(command: &str) -> bool {
     }
     let segments = match split_shell_pipeline(trimmed) {
         Some(segments) => segments,
-        None => return true,
+        None => return true, // redirections, chaining, subshells, etc.
     };
 
-    !segments.iter().all(|segment| {
+    // Require approval only if any segment contains a dangerous operation.
+    segments.iter().any(|segment| {
         let tokens = match shlex::split(segment) {
             Some(tokens) if !tokens.is_empty() => tokens,
-            _ => return false,
+            _ => return true,
         };
-        shell_tokens_are_read_only(&tokens)
+        shell_tokens_are_dangerous(&tokens)
     })
 }
 
@@ -3320,20 +3325,57 @@ fn split_shell_pipeline(command: &str) -> Option<Vec<String>> {
     Some(segments)
 }
 
-fn shell_tokens_are_read_only(tokens: &[String]) -> bool {
-    match tokens[0].as_str() {
-        "pwd" | "ls" | "cat" | "head" | "tail" | "wc" | "rg" | "grep" | "which" | "whereis"
-        | "cut" | "uniq" | "tr" | "nl" | "stat" | "file" | "realpath" | "readlink" | "basename"
-        | "dirname" => true,
-        "sort" | "tree" => !has_output_flag(tokens, &["-o", "--output"]),
-        "find" => find_command_is_read_only(tokens),
-        "git" => git_command_is_read_only(tokens),
+/// Returns true when the first token of a pipeline segment is a known-dangerous
+/// command. Pipeline-level hazards (`;`, `>`, `&`, `$()`, etc.) are already
+/// rejected by `split_shell_pipeline` before this is called.
+fn shell_tokens_are_dangerous(tokens: &[String]) -> bool {
+    let cmd = tokens[0].as_str();
+    // mkfs.ext4, mkfs.vfat, etc. are all disk-formatting commands.
+    if cmd == "dd"
+        || cmd.starts_with("mkfs")
+        || cmd == "fdisk"
+        || cmd == "parted"
+        || cmd == "diskutil"
+        || cmd == "sudo"
+        || cmd == "xargs"
+    {
+        return true;
+    }
+    match cmd {
+        // Shell/interpreter invoked with an inline script (-c / -lc / -ic etc.) can run anything.
+        "bash" | "sh" | "zsh" | "fish" | "python" | "python3" | "perl" | "ruby" | "node" => {
+            tokens.iter().skip(1).any(|t| {
+                t == "-c"
+                    || (t.starts_with('-')
+                        && !t.starts_with("--")
+                        && t[1..].contains('c'))
+            })
+        }
+        "rm" => rm_is_dangerous(tokens),
+        "find" => find_is_dangerous(tokens),
+        "git" => git_is_dangerous(tokens),
+        // sort/tree with -o/--output write to a file.
+        "sort" | "tree" => has_output_flag(tokens, &["-o", "--output"]),
         _ => false,
     }
 }
 
-fn find_command_is_read_only(tokens: &[String]) -> bool {
-    !tokens.iter().skip(1).any(|t| {
+/// rm is dangerous when it includes a recursive (-r/-R) or force (-f) flag,
+/// since those deletions are irreversible.
+fn rm_is_dangerous(tokens: &[String]) -> bool {
+    tokens.iter().skip(1).any(|t| {
+        t == "-r"
+            || t == "-R"
+            || t == "-f"
+            || t == "--force"
+            || (t.starts_with('-')
+                && !t.starts_with("--")
+                && t[1..].chars().any(|c| matches!(c, 'r' | 'R' | 'f')))
+    })
+}
+
+fn find_is_dangerous(tokens: &[String]) -> bool {
+    tokens.iter().skip(1).any(|t| {
         matches!(
             t.as_str(),
             "-delete"
@@ -3349,6 +3391,17 @@ fn find_command_is_read_only(tokens: &[String]) -> bool {
     })
 }
 
+fn git_is_dangerous(tokens: &[String]) -> bool {
+    if has_output_flag(tokens, &["-o", "--output"]) {
+        return true;
+    }
+    // git push with --force or -f is the only truly irreversible git operation.
+    if tokens.get(1).map(String::as_str) == Some("push") {
+        return tokens.iter().skip(2).any(|t| t == "--force" || t == "-f");
+    }
+    false
+}
+
 fn has_output_flag(tokens: &[String], flags: &[&str]) -> bool {
     tokens.iter().skip(1).any(|token| {
         flags.contains(&token.as_str())
@@ -3360,60 +3413,6 @@ fn has_output_flag(tokens: &[String], flags: &[&str]) -> bool {
                 }
             })
     })
-}
-
-fn git_command_is_read_only(tokens: &[String]) -> bool {
-    if has_output_flag(tokens, &["-o", "--output"]) {
-        return false;
-    }
-
-    match tokens.get(1).map(String::as_str) {
-        Some("status" | "diff" | "show" | "log" | "grep" | "ls-files" | "rev-parse") => true,
-        Some("branch") => git_branch_command_is_read_only(&tokens[2..]),
-        Some("remote") => git_remote_command_is_read_only(&tokens[2..]),
-        Some("tag") => git_tag_command_is_read_only(&tokens[2..]),
-        Some("stash") => git_stash_command_is_read_only(&tokens[2..]),
-        _ => false,
-    }
-}
-
-fn git_branch_command_is_read_only(args: &[String]) -> bool {
-    if args.is_empty() {
-        return true;
-    }
-    if args == ["--show-current"] {
-        return true;
-    }
-    if args == ["-a"] || args == ["--all"] || args == ["-r"] || args == ["--remotes"] {
-        return true;
-    }
-    if args == ["-v"] || args == ["-vv"] {
-        return true;
-    }
-    if args.first().map(String::as_str) == Some("--list") {
-        return args.iter().skip(1).all(|arg| !arg.starts_with('-'));
-    }
-    false
-}
-
-fn git_remote_command_is_read_only(args: &[String]) -> bool {
-    args.is_empty() || args == ["-v"]
-}
-
-fn git_tag_command_is_read_only(args: &[String]) -> bool {
-    if args.is_empty() {
-        return true;
-    }
-    if args.first().map(String::as_str) == Some("-l")
-        || args.first().map(String::as_str) == Some("--list")
-    {
-        return args.iter().skip(1).all(|arg| !arg.starts_with('-'));
-    }
-    false
-}
-
-fn git_stash_command_is_read_only(args: &[String]) -> bool {
-    args == ["list"]
 }
 
 fn build_system_prompt(ctx: &TerminalContext) -> String {
@@ -3931,6 +3930,7 @@ mod markdown_tests {
             "basename src/main.rs",
             "dirname src/main.rs",
             "find . -name '*.rs'",
+            // git commands — read-only and previously restricted ones are all now allowed
             "git status",
             "git diff HEAD~1",
             "git diff --output-indicator-new=+",
@@ -3946,6 +3946,28 @@ mod markdown_tests {
             "git tag -l 'V0.*'",
             "git stash list",
             "git rev-parse --show-toplevel",
+            // git operations that modify local state are now allowed
+            "git checkout main",
+            "git branch new-feature",
+            "git tag V0.9.0",
+            "git remote add origin https://example.com/repo.git",
+            "git stash push -m test",
+            "git add .",
+            "git commit -m 'fix: update config'",
+            "git push origin main",
+            // other common dev commands now allowed
+            "npm install",
+            "npm run build",
+            "cargo build",
+            "cargo test",
+            "make",
+            "make test",
+            "touch file.txt",
+            "mkdir -p src/new",
+            "cp Cargo.toml Cargo.toml.bak",
+            "mv old.txt new.txt",
+            "echo hello",
+            // piped safe commands
             "grep 'foo|bar' Cargo.toml",
             "cat Cargo.toml | tr a-z A-Z",
             "rg TODO src | sort | uniq",
@@ -3955,31 +3977,50 @@ mod markdown_tests {
             assert!(
                 approval_summary("shell_exec", &serde_json::json!({ "command": command }))
                     .is_none(),
-                "expected read-only command to skip approval: {}",
+                "expected command to skip approval: {}",
                 command
             );
         }
     }
 
     #[test]
-    fn shell_exec_mutating_or_compound_commands_require_approval() {
+    fn shell_exec_dangerous_commands_require_approval() {
         for command in [
-            "git checkout main",
-            "git branch new-feature",
-            "git tag V0.9.0",
-            "git remote add origin https://example.com/repo.git",
-            "git stash push -m test",
+            // privilege escalation
+            "sudo rm -rf /",
+            "sudo anything",
+            // rm with recursive or force flags
             "rm -rf /tmp/x",
-            "ls || wc",
-            "cat a > b",
+            "rm -r src/",
+            "rm -f important.txt",
+            "rm -Rf ./dist",
+            // shell/interpreter subshells with -c
+            "bash -c 'rm -rf /'",
+            "sh -c 'pwd'",
+            "python3 -c 'print(1)'",
+            // xargs (pipes to arbitrary command)
+            "rg TODO src | xargs rm",
+            "find . | xargs echo",
+            // disk operations
+            "dd if=/dev/zero of=/dev/sda",
+            "mkfs.ext4 /dev/sda1",
+            "diskutil eraseDisk",
+            // find with write/exec flags
             "find . -delete",
             "find . -fprint out.txt",
+            "find . -exec rm {} \\;",
+            // output flags on sort/tree
             "sort -o out.txt Cargo.toml",
             "tree -o out.txt .",
-            "bash -lc 'pwd'",
-            "rg TODO src | xargs rm",
-            "pwd && ls",
+            // git push --force
+            "git push --force origin main",
+            "git push -f",
+            // git with --output
             "git diff --output=out.patch",
+            // pipeline hazards (already handled by split_shell_pipeline)
+            "ls || wc",
+            "cat a > b",
+            "pwd && ls",
         ] {
             assert!(
                 approval_summary("shell_exec", &serde_json::json!({ "command": command }))
