@@ -56,6 +56,7 @@ pub mod keyassignment;
 mod keys;
 pub mod lua;
 pub mod meta;
+pub mod proxy;
 mod scheme_data;
 mod serial;
 mod ssh;

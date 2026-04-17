@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use config::proxy::{apply_to_command, detect_system_proxy};
 use config::{configuration, wezterm_version};
 use serde::*;
 use std::cmp::Ordering as CmpOrdering;
@@ -23,70 +24,6 @@ pub struct Asset {
     pub browser_download_url: String,
 }
 
-// Detect the macOS system proxy from Network Settings.
-// Returns None if any proxy env var is already set (curl picks it up automatically).
-fn detect_system_proxy() -> Option<String> {
-    use std::process::Command;
-
-    const PROXY_VARS: &[&str] = &[
-        "https_proxy",
-        "HTTPS_PROXY",
-        "http_proxy",
-        "HTTP_PROXY",
-        "ALL_PROXY",
-        "all_proxy",
-    ];
-    if PROXY_VARS.iter().any(|v| std::env::var(v).is_ok()) {
-        return None;
-    }
-
-    let out = Command::new("/usr/sbin/scutil")
-        .arg("--proxy")
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-
-    let text = String::from_utf8_lossy(&out.stdout);
-    parse_scutil_proxy(&text)
-}
-
-fn parse_scutil_proxy(text: &str) -> Option<String> {
-    let mut https = (false, String::new(), String::new());
-    let mut http = (false, String::new(), String::new());
-    let mut socks = (false, String::new(), String::new());
-
-    for line in text.lines() {
-        if let Some((k, v)) = line.trim().split_once(" : ") {
-            let v = v.trim().to_string();
-            match k.trim() {
-                "HTTPSEnable" => https.0 = v == "1",
-                "HTTPSProxy" => https.1 = v,
-                "HTTPSPort" => https.2 = v,
-                "HTTPEnable" => http.0 = v == "1",
-                "HTTPProxy" => http.1 = v,
-                "HTTPPort" => http.2 = v,
-                "SOCKSEnable" => socks.0 = v == "1",
-                "SOCKSProxy" => socks.1 = v,
-                "SOCKSPort" => socks.2 = v,
-                _ => {}
-            }
-        }
-    }
-
-    if https.0 && !https.1.is_empty() && !https.2.is_empty() {
-        return Some(format!("http://{}:{}", https.1, https.2));
-    }
-    if http.0 && !http.1.is_empty() && !http.2.is_empty() {
-        return Some(format!("http://{}:{}", http.1, http.2));
-    }
-    if socks.0 && !socks.1.is_empty() && !socks.2.is_empty() {
-        return Some(format!("socks5h://{}:{}", socks.1, socks.2));
-    }
-    None
-}
-
 fn curl_get_release_json(url: &str, proxy: &Option<String>) -> anyhow::Result<Release> {
     use std::process::Command;
 
@@ -100,14 +37,7 @@ fn curl_get_release_json(url: &str, proxy: &Option<String>) -> anyhow::Result<Re
         .arg("--user-agent")
         .arg(format!("kaku/{}", wezterm_version()))
         .arg(url);
-    if let Some(p) = proxy {
-        cmd.env("https_proxy", p)
-            .env("HTTPS_PROXY", p)
-            .env("http_proxy", p)
-            .env("HTTP_PROXY", p)
-            .env("all_proxy", p)
-            .env("ALL_PROXY", p);
-    }
+    apply_to_command(&mut cmd, proxy);
 
     let out = cmd.output().map_err(|e| anyhow!("curl failed: {}", e))?;
     if !out.status.success() {
@@ -143,14 +73,7 @@ fn get_latest_tag_via_redirect(proxy: &Option<String>) -> anyhow::Result<Release
         .arg("--output")
         .arg("/dev/null")
         .arg("https://github.com/tw93/Kaku/releases/latest");
-    if let Some(p) = proxy {
-        cmd.env("https_proxy", p)
-            .env("HTTPS_PROXY", p)
-            .env("http_proxy", p)
-            .env("HTTP_PROXY", p)
-            .env("all_proxy", p)
-            .env("ALL_PROXY", p);
-    }
+    apply_to_command(&mut cmd, proxy);
 
     let output = cmd.output().map_err(|e| anyhow!("curl failed: {}", e))?;
 
@@ -422,7 +345,7 @@ fn check_update_completed() {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_newer, parse_scutil_proxy};
+    use super::is_newer;
 
     #[test]
     fn semver_numeric_comparison() {
@@ -430,58 +353,5 @@ mod tests {
         assert!(!is_newer("0.2.0", "0.11.0"));
         assert!(!is_newer("0.1.1", "0.1.1"));
         assert!(is_newer("v0.1.2", "0.1.1"));
-    }
-
-    #[test]
-    fn parse_scutil_proxy_prefers_https_then_http_then_socks() {
-        let text = r#"
-<dictionary> {
-  HTTPEnable : 1
-  HTTPPort : 8080
-  HTTPProxy : 127.0.0.1
-  HTTPSEnable : 1
-  HTTPSPort : 8443
-  HTTPSProxy : proxy.example.com
-  SOCKSEnable : 1
-  SOCKSPort : 1080
-  SOCKSProxy : socks.example.com
-}
-"#;
-
-        assert_eq!(
-            parse_scutil_proxy(text).as_deref(),
-            Some("http://proxy.example.com:8443")
-        );
-    }
-
-    #[test]
-    fn parse_scutil_proxy_uses_socks5h_for_socks_proxy() {
-        let text = r#"
-<dictionary> {
-  HTTPEnable : 0
-  HTTPSEnable : 0
-  SOCKSEnable : 1
-  SOCKSPort : 1080
-  SOCKSProxy : 127.0.0.1
-}
-"#;
-
-        assert_eq!(
-            parse_scutil_proxy(text).as_deref(),
-            Some("socks5h://127.0.0.1:1080")
-        );
-    }
-
-    #[test]
-    fn parse_scutil_proxy_returns_none_when_no_enabled_proxy_has_endpoint() {
-        let text = r#"
-<dictionary> {
-  HTTPEnable : 0
-  HTTPSEnable : 0
-  SOCKSEnable : 0
-}
-"#;
-
-        assert_eq!(parse_scutil_proxy(text), None);
     }
 }
