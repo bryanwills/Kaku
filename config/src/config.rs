@@ -2225,10 +2225,7 @@ mod tests {
     fn file_hyperlink_preserves_line_and_column() {
         // file:line and file:line:col suffixes must still be captured so
         // that the click handler can jump to the right position.
-        assert_eq!(
-            file_uri("see docs/foo.md:42 now"),
-            "file://docs/foo.md:42"
-        );
+        assert_eq!(file_uri("see docs/foo.md:42 now"), "file://docs/foo.md:42");
         assert_eq!(
             file_uri("see docs/foo.md:42:10 now"),
             "file://docs/foo.md:42:10"
@@ -2269,7 +2266,10 @@ mod tests {
         // Extensionless files (Makefile-style) still work because the
         // last character is an ASCII letter.
         assert_eq!(file_uri("see ./Makefile."), "file://./Makefile");
-        assert_eq!(file_uri("see docker/Dockerfile,"), "file://docker/Dockerfile");
+        assert_eq!(
+            file_uri("see docker/Dockerfile,"),
+            "file://docker/Dockerfile"
+        );
     }
 }
 
