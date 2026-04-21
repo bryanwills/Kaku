@@ -5,7 +5,7 @@ description: Kaku's release history at a glance
 
 The full, linkable release notes live on [GitHub Releases](https://github.com/tw93/Kaku/releases). The list below walks through every version in reverse chronological order so you can see how Kaku evolved.
 
-## V0.9.0 Spark ✨ — 2026-04-04
+## V0.9.0 Spark ✨, 2026-04-04
 
 AI that meets you at the command line.
 
@@ -16,7 +16,7 @@ AI that meets you at the command line.
 - **Provider presets**: MiniMax added
 - **Stability**: fixed Option+Click crash, divide-by-zero in split pane sizing, unwrap panic in mouse handling
 
-## V0.8.0 Fish 🐟 — 2026-03-23
+## V0.8.0 Fish 🐟, 2026-03-23
 
 A first-class welcome for fish shell users.
 
@@ -27,7 +27,7 @@ A first-class welcome for fish shell users.
 - **Basename-only tab titles**: new `tab_title_basename_only` option
 - **Scrollback fixes**: viewport no longer jumps to the top during rapid output, and no more unexpected jumps while using Claude Code
 
-## V0.7.1 Flow 🌊 — 2026-03-13
+## V0.7.1 Flow 🌊, 2026-03-13
 
 Polish across theming, settings, and the AI workflow.
 
@@ -39,9 +39,9 @@ Polish across theming, settings, and the AI workflow.
 - **File & editor workflow**: better file-link opening, a remote files shortcut for SSH sessions, respect for `$EDITOR`
 - **Rounded scrollbars**: optional, enable in `kaku config`
 
-## V0.6.0 Clarity ☀️ — 2026-03-08
+## V0.6.0 Clarity ☀️, 2026-03-08
 
-Light theme, AI usage visibility, and an interactive settings TUI — all in one release.
+Light theme, AI usage visibility, and an interactive settings TUI, all in one release.
 
 - **Light theme**: dynamic font weight, improved ANSI colors, Claude Code-specific color overrides
 - **AI usage visibility**: the AI panel now surfaces usage summaries and remaining quota, adds Kimi Code support, Kimi usage tracking, and more reliable Claude OAuth token persistence
@@ -52,7 +52,7 @@ Light theme, AI usage visibility, and an interactive settings TUI — all in one
 - **macOS input fixes**: non-Latin IMEs no longer block `Cmd + alnum` shortcuts; dead keys and Turkish tilde input fixed
 - **Memory**: lazy scrollback allocation, capped background image and gradient caches for stable long-session memory use
 
-## V0.5.1 Kindness 🌴 — 2026-02-28
+## V0.5.1 Kindness 🌴, 2026-02-28
 
 Follow-up fixes for V0.5.0.
 
@@ -61,7 +61,7 @@ Follow-up fixes for V0.5.0.
 - Fixed `Cmd + Shift + ,` not passing through to tmux
 - Fixed `kaku cli split-pane` panic, spurious error toast during AI analysis, and an update notification appearing even when `check_for_updates` was disabled
 
-## V0.5.0 Yohaku 🪽 — 2026-02-27
+## V0.5.0 Yohaku 🪽, 2026-02-27
 
 The AI era starts here.
 
@@ -74,7 +74,7 @@ The AI era starts here.
 - **Unified AI config**: `kaku ai` covers Kaku Assistant, Factory Droid, and opencode.jsonc
 - **Faster startup**: Lua bytecode caching, deferred module loading, Fat LTO
 
-## V0.4.0 AIIIIIII 🥂 — 2026-02-19
+## V0.4.0 AIIIIIII 🥂, 2026-02-19
 
 A first step into AI, paired with a graphics pipeline overhaul.
 
@@ -87,7 +87,7 @@ A first step into AI, paired with a graphics pipeline overhaul.
 - **Per-pane encoding**: switch between UTF-8, GBK, GB18030, Big5, EUC-KR, Shift-JIS independently per pane
 - **URL scheme**: `kaku://open-tab?tty=<device>` lets external scripts jump straight to a specific pane
 
-## V0.3.1 New Year 🎋 — 2026-02-16
+## V0.3.1 New Year 🎋, 2026-02-16
 
 - `Cmd + K` clears the screen (`Cmd + R` still supported)
 - `Cmd + Shift + S` toggles split pane direction
@@ -96,7 +96,7 @@ A first step into AI, paired with a graphics pipeline overhaul.
 - Tab key restored to show the completion list; Right Arrow accepts autosuggestions
 - `kaku init` auto-creates `~/.config/kaku/kaku.lua` if missing
 
-## V0.3.0 Happy 🥙 — 2026-02-16
+## V0.3.0 Happy 🥙, 2026-02-16
 
 System integration goes wide.
 
@@ -111,7 +111,7 @@ System integration goes wide.
 - **Multi-file Dock drop**: drop multiple files on the Dock icon, each opens in its own tab
 - **Bar cursor**: modern default, supports Vim-mode switching; window shadow disabled by default to reduce GPU usage
 
-## V0.2.0 Craft 🍺 — 2026-02-13
+## V0.2.0 Craft 🍺, 2026-02-13
 
 From "it runs" to "it installs and feels great."
 
@@ -128,7 +128,7 @@ From "it runs" to "it installs and feels great."
 - **Menu bar**: command palette, settings, check for updates, native notifications
 - **Built-in updater**: `kaku update` in the terminal or the menu bar item
 
-## V0.1.1 Easy to use 🍤 — 2026-02-09
+## V0.1.1 Easy to use 🍤, 2026-02-09
 
 - **Kaku Theme**: signature high-contrast dark theme tuned for long Claude / Codex sessions
 - Optimized macOS font rasterization (light hinting) for crisper Retina text
@@ -137,7 +137,7 @@ From "it runs" to "it installs and feels great."
 - `setup_zsh.sh` script ships common aliases and git shortcuts
 - Tab bar supports path-based titles and visual indicators
 
-## V0.1.0 Freshmen 🧝‍♀️ — 2026-02-08
+## V0.1.0 Freshmen 🧝‍♀️, 2026-02-08
 
 Kaku's first release. Built on top of [WezTerm](https://github.com/wez/wezterm), deeply tuned for AI coding on macOS.
 

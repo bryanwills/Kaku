@@ -18,7 +18,7 @@ import { roadmapEn as roadmap } from '../../content-pages/roadmap-data-en';
             {stage.items.map(item => (
               <li>
                 <strong>{item.title}</strong>
-                {item.desc && <span class="desc"> — {item.desc}</span>}
+                {item.desc && <span class="desc">: {item.desc}</span>}
                 {item.issue && <a href={item.issue} class="issue" target="_blank" rel="noopener noreferrer">#issue</a>}
               </li>
             ))}

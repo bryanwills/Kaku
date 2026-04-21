@@ -11,8 +11,8 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://tw93.github.io',
-  base: '/Kaku',
+  site: 'https://kaku.tw93.fun',
+  base: '/',
   integrations: [
     starlight({
       title: 'Kaku',

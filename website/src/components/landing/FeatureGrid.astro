@@ -2,7 +2,7 @@
 interface Props { lang?: string; }
 const { lang = 'zh-CN' } = Astro.props;
 const isEn = lang === 'en';
-const pre = isEn ? '/Kaku/en' : '/Kaku';
+const pre = isEn ? '/en' : '';
 
 interface Feature { icon: string; title: string; desc: string; href: string; }
 

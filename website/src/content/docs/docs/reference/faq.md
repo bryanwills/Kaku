@@ -38,7 +38,7 @@ config.keys[#config.keys + 1] = {
 }
 ```
 
-更多示例见 [快捷键](/Kaku/docs/config/keybindings/) 和 [Lua 配置](/Kaku/docs/config/lua/)。
+更多示例见 [快捷键](/docs/config/keybindings/) 和 [Lua 配置](/docs/config/lua/)。
 
 ## 可以控制工作目录的继承行为吗？
 
@@ -89,7 +89,7 @@ kaku cli split-pane -- bash -c "echo hello"
 kaku cli --help
 ```
 
-完整参考见 [CLI 命令](/Kaku/docs/reference/cli/)。
+完整参考见 [CLI 命令](/docs/reference/cli/)。
 
 ## 怎么开启滚动条？
 
@@ -129,7 +129,7 @@ yazi 的远程文件功能（`Cmd+Shift+R`）才是为 SSH 会话设计的，它
 
 ## shell 包装命令 `y` 退出后没有同步目录。
 
-请确认 Kaku 的 fish/zsh shell 集成已加载，可用 `kaku doctor` 检查。`y` 包装命令依赖 shell 初始化脚本——直接运行 `yazi` 不会同步目录。
+请确认 Kaku 的 fish/zsh shell 集成已加载，可用 `kaku doctor` 检查。`y` 包装命令依赖 shell 初始化脚本，直接运行 `yazi` 不会同步目录。
 
 ## Homebrew 找不到对应的二进制 / 更新错了 kaku。
 

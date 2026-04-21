@@ -15,7 +15,9 @@ Run `kaku ai` to open the AI settings panel. Enable Kaku Assistant, pick a provi
 
 | Provider | Base URL | Models |
 | :--- | :--- | :--- |
-| OpenAI | `https://api.openai.com/v1` | (free text) |
+| Copilot | `https://api.githubcopilot.com` | `gpt-4.1`, `gpt-4.5`, `claude-sonnet-4-5`, `o4-mini` |
+| Codex | `https://api.openai.com/v1` | `codex-mini-latest`, `o4-mini`, `o3` |
+| Gemini | `https://generativelanguage.googleapis.com` | `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.0-flash` |
 | Custom | (manual) | (free text) |
 
 Selecting a provider auto-fills the base URL and populates the model dropdown.
@@ -46,9 +48,13 @@ The config lives at `~/.config/kaku/assistant.toml`:
 | :--- | :--- |
 | `enabled` | `true` to enable, `false` to disable |
 | `api_key` | Your provider API key |
-| `model` | Model identifier, e.g. `DeepSeek-V3.2` |
+| `model` | Model used for error recovery and natural language to command |
+| `chat_model` | Model used by AI Chat opened with `Cmd + L` |
+| `chat_model_choices` | Optional model list for AI Chat switching |
 | `base_url` | OpenAI-compatible API root URL |
 | `custom_headers` | Extra HTTP headers for enterprise proxies, e.g. `["X-Customer-ID: your-id"]` |
+| `web_search_provider` | Optional web search provider for AI Chat |
+| `web_search_api_key` | Optional API key for the web search provider |
 
 ---
 

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('landing page renders all 9 sections with primary CTA', async ({ page }) => {
-  await page.goto('/Kaku/');
+  await page.goto('/');
 
   await expect(page.locator('h1')).toContainText('AI coding');
 
@@ -12,7 +12,7 @@ test('landing page renders all 9 sections with primary CTA', async ({ page }) =>
     '[3] 6 核心特性',
     '[4] 自然语言 → 命令',
     '[5] 迁移指南',
-    '[6] 主题与截图',
+    '[6] 真实截图',
     '[7] 快速开始',
     '[8] Why Kaku',
     '[9] FAQ',
@@ -26,7 +26,7 @@ test('landing page renders all 9 sections with primary CTA', async ({ page }) =>
 });
 
 test('migrate tabs switch content', async ({ page }) => {
-  await page.goto('/Kaku/');
+  await page.goto('/');
   const iTermPanel = page.locator('[data-panel="iterm2"]');
   const wezPanel = page.locator('[data-panel="wezterm"]');
   await expect(iTermPanel).toHaveClass(/active/);

@@ -41,7 +41,7 @@ kaku update
 
 ## kaku reset
 
-把 Kaku 的配置和状态文件重置为默认值。请谨慎使用——此命令会覆盖 `~/.config/kaku/kaku.lua`。
+把 Kaku 的配置和状态文件重置为默认值。请谨慎使用，此命令会覆盖 `~/.config/kaku/kaku.lua`。
 
 ```bash
 kaku reset

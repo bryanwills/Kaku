@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests',
   webServer: {
     command: 'pnpm build && pnpm preview --port 4321',
-    url: 'http://localhost:4321/Kaku/',
+    url: 'http://localhost:4321/',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

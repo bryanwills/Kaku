@@ -7,32 +7,30 @@ const isEn = lang === 'en';
 
 interface NavLink { label: string; href: string; }
 const links: NavLink[] = isEn ? [
-  { label: 'Docs',      href: '/Kaku/en/docs/' },
-  { label: 'Download',  href: '/Kaku/en/download' },
-  { label: 'Roadmap',   href: '/Kaku/en/roadmap' },
-  { label: 'Changelog', href: '/Kaku/en/changelog' },
+  { label: 'Docs',      href: '/en/docs/' },
+  { label: 'Download',  href: '/en/download' },
+  { label: 'Roadmap',   href: '/en/roadmap' },
+  { label: 'Changelog', href: '/en/changelog' },
 ] : [
-  { label: '文档',      href: '/Kaku/docs/' },
-  { label: '下载',      href: '/Kaku/download' },
-  { label: 'Roadmap',   href: '/Kaku/roadmap' },
-  { label: 'Changelog', href: '/Kaku/changelog' },
+  { label: '文档',      href: '/docs/' },
+  { label: '下载',      href: '/download' },
+  { label: 'Roadmap',   href: '/roadmap' },
+  { label: 'Changelog', href: '/changelog' },
 ];
 
 const trimTrailingSlash = (path: string) => path === '/' ? path : path.replace(/\/$/, '');
 const currentPath = trimTrailingSlash(Astro.url.pathname);
-const pathWithoutBase = currentPath.startsWith('/Kaku')
-  ? currentPath.slice('/Kaku'.length) || '/'
-  : currentPath;
+const pathWithoutBase = currentPath || '/';
 const zhPath = pathWithoutBase.replace(/^\/en(?=\/|$)/, '') || '/';
 const langSwitchHref = isEn
-  ? `/Kaku${zhPath}`
-  : `/Kaku/en${pathWithoutBase === '/' ? '/' : pathWithoutBase}`;
+  ? zhPath
+  : `/en${pathWithoutBase === '/' ? '/' : pathWithoutBase}`;
 const langSwitchLabel = isEn ? '中' : 'EN';
 ---
 
 <nav class="site-nav" aria-label="Primary">
   <div class="kk-container-wide nav-inner">
-    <a class="brand" href={isEn ? '/Kaku/en/' : '/Kaku/'}>
+    <a class="brand" href={isEn ? '/en/' : '/'}>
       <span class="brand-mark">▸</span>
       <span class="brand-name">Kaku</span>
     </a>
