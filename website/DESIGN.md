@@ -3,7 +3,7 @@ version: alpha
 name: Kaku
 description: >
   Terminal emulator for macOS. Dark-first, monospace-led design system
-  built around a neon-green accent on near-black surfaces. No light mode in v1.
+  built around a neon-green accent on near-black surfaces. Website v1 is dark-only.
 
 colors:
   bg:            "#0a0a0a"
@@ -135,8 +135,8 @@ components:
 Kaku is a GPU-accelerated terminal emulator for macOS with built-in AI. The visual
 language is **raw terminal hacker**: pure-black surfaces, JetBrains Mono as the
 primary display typeface, and a single neon-green accent (`#00ff9f`) that connects
-the brand to the terminal output it renders. Every surface is dark; v1 ships no
-light mode.
+the brand to the terminal output it renders. Every website surface is dark in v1;
+the product still supports light and dark themes.
 
 The tone is terse and technical. Copy is written for developers who already know
 what a terminal is. Decorative elements are removed in favour of motion that
