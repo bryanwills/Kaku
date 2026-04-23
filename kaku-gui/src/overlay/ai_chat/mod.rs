@@ -25,6 +25,7 @@ use unicode_segmentation::UnicodeSegmentation;
 mod agent;
 mod approval;
 mod markdown;
+mod waza;
 
 pub(crate) use agent::{generate_summary, maybe_extract_memories, run_agent};
 pub(crate) use approval::{
@@ -660,16 +661,7 @@ impl App {
         let Some((_, _, token)) = self.current_slash_query() else {
             return Vec::new();
         };
-        let query = token[1..].to_ascii_lowercase();
-        let all = vec![
-            ("/new", "Start a new conversation"),
-            ("/resume", "Resume a previous conversation"),
-        ];
-        all.into_iter()
-            .filter(|(label, _)| {
-                query.is_empty() || label[1..].starts_with(&query) || *label == token.as_str()
-            })
-            .collect()
+        slash_command_options_for_token(&token)
     }
 
     /// Rotate the picker selection. `attachment_picker_index` is reused for
@@ -695,6 +687,15 @@ impl App {
         let byte_end = char_to_byte_pos(&self.input, end);
         self.input.replace_range(byte_start..byte_end, replacement);
         self.input_cursor = start + replacement.chars().count();
+    }
+
+    fn ensure_space_after_cursor(&mut self) {
+        let byte_pos = char_to_byte_pos(&self.input, self.input_cursor);
+        let next_char = self.input[byte_pos..].chars().next();
+        if next_char.map_or(true, |ch| !ch.is_whitespace()) {
+            self.input.insert(byte_pos, ' ');
+        }
+        self.input_cursor += 1;
     }
 
     fn move_attachment_picker(&mut self, delta: isize) -> bool {
@@ -741,8 +742,20 @@ impl App {
         };
         let option = options[self.attachment_picker_index.min(options.len() - 1)];
         self.replace_token(start, end, option.0);
+        if !slash_command_submits_immediately(option.0) {
+            self.ensure_space_after_cursor();
+        }
         self.attachment_picker_index = 0;
         true
+    }
+
+    fn selected_slash_command(&self) -> Option<&'static str> {
+        let options = self.slash_picker_options();
+        if options.is_empty() {
+            return None;
+        }
+        let option = options[self.attachment_picker_index.min(options.len() - 1)];
+        Some(option.0)
     }
 
     /// Drain the background model fetch channel.
@@ -885,6 +898,37 @@ fn attachment_option_by_label(label: &str) -> Option<AttachmentOption> {
         "@tab" => Some(ATTACHMENT_TAB),
         "@selection" => Some(ATTACHMENT_SELECTION),
         _ => None,
+    }
+}
+
+fn slash_command_options_for_token(token: &str) -> Vec<(&'static str, &'static str)> {
+    let query = token.trim_start_matches('/').to_ascii_lowercase();
+    let builtins = [
+        ("/new", "Start a new conversation"),
+        ("/resume", "Resume a previous conversation"),
+    ];
+    builtins
+        .iter()
+        .copied()
+        .chain(
+            waza::all()
+                .iter()
+                .map(|skill| (skill.command, skill.description)),
+        )
+        .filter(|(label, _)| query.is_empty() || label[1..].starts_with(&query) || *label == token)
+        .collect()
+}
+
+fn slash_command_submits_immediately(command: &str) -> bool {
+    matches!(command, "/new" | "/resume")
+}
+
+fn push_waza_instruction(
+    out: &mut Vec<ApiMessage>,
+    active_waza_skill: Option<&'static waza::Skill>,
+) {
+    if let Some(skill) = active_waza_skill {
+        out.push(ApiMessage::system(waza::system_instruction(skill)));
     }
 }
 
@@ -1303,7 +1347,23 @@ impl App {
             return;
         }
 
-        let (text, attachments) = match resolve_input_attachments(&raw_input, &self.context) {
+        let waza_invocation = waza::parse_invocation(&raw_input);
+        let active_waza_skill = waza_invocation.map(|invocation| invocation.skill);
+        let input_for_message = match waza_invocation {
+            Some(invocation) => match waza::request_text(invocation) {
+                Ok(text) => text,
+                Err(err) => {
+                    self.messages
+                        .push(Message::text(Role::Assistant, err, true, true));
+                    self.display_lines_dirty = true;
+                    return;
+                }
+            },
+            None => raw_input.clone(),
+        };
+
+        let (text, attachments) = match resolve_input_attachments(&input_for_message, &self.context)
+        {
             Ok(result) => result,
             Err(err) => {
                 self.messages
@@ -1338,7 +1398,7 @@ impl App {
         let cancel = Arc::clone(&self.cancel_flag);
         let client = self.client.clone();
         let model = self.current_model();
-        let initial_messages = self.build_api_messages();
+        let initial_messages = self.build_api_messages(active_waza_skill);
         let cwd = self.context.cwd.clone();
         let tools: Vec<serde_json::Value> = if client.tools_enabled() {
             crate::ai_tools::all_tools(client.config())
@@ -1354,9 +1414,13 @@ impl App {
         });
     }
 
-    fn build_api_messages(&self) -> Vec<ApiMessage> {
+    fn build_api_messages(
+        &self,
+        active_waza_skill: Option<&'static waza::Skill>,
+    ) -> Vec<ApiMessage> {
         let mut out = Vec::new();
         out.push(ApiMessage::system(build_system_prompt()));
+        push_waza_instruction(&mut out, active_waza_skill);
         // Dynamic fields (date, cwd, locale) go into a separate user message so
         // the static system prompt can hit Anthropic's prompt-cache discount.
         out.push(build_environment_message(&self.context));
@@ -2620,12 +2684,16 @@ fn handle_key(key: &KeyEvent, app: &mut App) -> Action {
             }
         }
 
-        // Submit: accept slash selection then execute it immediately.
-        // Slash commands (/new, /resume) take no inline arguments, so there is
-        // no reason to keep the picker open after the user presses Enter.
+        // Submit: built-in control commands execute immediately. Waza commands
+        // only complete the command and leave the cursor ready for arguments.
         (KeyCode::Enter, Modifiers::NONE) if !slash_options.is_empty() => {
+            let submits_immediately = app
+                .selected_slash_command()
+                .is_some_and(slash_command_submits_immediately);
             app.accept_slash_picker();
-            app.submit();
+            if submits_immediately {
+                app.submit();
+            }
             Action::Continue
         }
         (KeyCode::Enter, Modifiers::NONE) if !picker_options.is_empty() && !picker_exact_match => {
@@ -3576,6 +3644,46 @@ mod markdown_tests {
     fn resolve_input_attachments_requires_question_after_tokens() {
         let err = resolve_input_attachments("@cwd @tab", &test_context()).unwrap_err();
         assert!(err.contains("Add a question"));
+    }
+
+    #[test]
+    fn slash_command_options_include_waza_skills() {
+        let labels: Vec<&str> = slash_command_options_for_token("/ch")
+            .into_iter()
+            .map(|(label, _)| label)
+            .collect();
+        assert_eq!(labels, vec!["/check"]);
+
+        let labels: Vec<&str> = slash_command_options_for_token("/")
+            .into_iter()
+            .map(|(label, _)| label)
+            .collect();
+        assert!(labels.contains(&"/new"));
+        assert!(labels.contains(&"/resume"));
+        assert!(labels.contains(&"/hunt"));
+        assert!(labels.contains(&"/write"));
+    }
+
+    #[test]
+    fn only_control_slash_commands_submit_immediately() {
+        assert!(slash_command_submits_immediately("/new"));
+        assert!(slash_command_submits_immediately("/resume"));
+        assert!(!slash_command_submits_immediately("/check"));
+        assert!(!slash_command_submits_immediately("/write"));
+    }
+
+    #[test]
+    fn push_waza_instruction_is_optional() {
+        let mut out = Vec::new();
+        push_waza_instruction(&mut out, None);
+        assert!(out.is_empty());
+
+        let skill = waza::find("/check").expect("check skill");
+        push_waza_instruction(&mut out, Some(skill));
+        assert_eq!(out.len(), 1);
+        let content = out[0].0["content"].as_str().unwrap_or("");
+        assert!(content.contains("Active skill: /check"));
+        assert!(content.contains("current user turn only"));
     }
 
     #[test]
