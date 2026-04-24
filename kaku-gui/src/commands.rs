@@ -907,6 +907,20 @@ impl CommandDef {
                         ));
                         menu.add_item(&check_update);
 
+                        // Show "Restart to Update" when a staged update is ready.
+                        if let Some(info) = crate::update::staged_update_available() {
+                            let version = info.tag.trim_start_matches(['v', 'V']);
+                            let restart_item = MenuItem::new_with(
+                                &format!("Restart to Update ({})", version),
+                                Some(kaku_perform_key_assignment_sel),
+                                "",
+                            );
+                            restart_item.set_represented_item(RepresentedItem::KeyAssignment(
+                                KeyAssignment::EmitEvent("restart-to-update".to_string()),
+                            ));
+                            menu.add_item(&restart_item);
+                        }
+
                         let set_default_terminal_item = MenuItem::new_with(
                             "Set as Default Terminal",
                             Some(kaku_perform_key_assignment_sel),

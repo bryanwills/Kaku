@@ -172,6 +172,78 @@ pub fn run_kaku_update_from_menu() {
     run_kaku_subcommand_in_new_tab("update", Some(&UPDATE_RUNNING));
 }
 
+/// Apply a previously staged update by spawning the helper script directly,
+/// without opening a terminal tab.
+pub fn restart_to_update() {
+    use crate::update::{
+        cleanup_staged_update, resolve_target_app_path, spawn_update_helper,
+        staged_update_available, write_update_helper_script,
+    };
+
+    fn fallback_with_toast(msg: &str) {
+        log::error!("restart_to_update: {}", msg);
+        wezterm_toast_notification::persistent_toast_notification(
+            "Update Failed",
+            "Automatic update failed. Trying manual update.",
+        );
+        run_kaku_update_from_menu();
+    }
+
+    let info = match staged_update_available() {
+        Some(info) => info,
+        None => {
+            log::warn!("restart_to_update: no staged update available, falling back to menu flow");
+            run_kaku_update_from_menu();
+            return;
+        }
+    };
+
+    let target_app = match resolve_target_app_path() {
+        Ok(p) => p,
+        Err(e) => {
+            fallback_with_toast(&format!("failed to resolve target app: {}", e));
+            return;
+        }
+    };
+
+    let new_app = std::path::PathBuf::from(&info.app_path);
+    // The work_dir for the helper script is the staged_update directory itself.
+    let work_dir = config::DATA_DIR.join("staged_update");
+
+    let update_root = config::DATA_DIR.join("updates");
+    if let Err(e) = config::create_user_owned_dirs(&update_root) {
+        fallback_with_toast(&format!("failed to create updates dir: {}", e));
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let helper_script = update_root.join(format!("apply-staged-{}.sh", now));
+
+    if let Err(e) = write_update_helper_script(&helper_script) {
+        fallback_with_toast(&format!("failed to write helper script: {}", e));
+        return;
+    }
+
+    if let Err(e) = spawn_update_helper(&helper_script, &target_app, &new_app, &work_dir) {
+        log::error!("restart_to_update: failed to spawn helper: {}", e);
+        cleanup_staged_update();
+        wezterm_toast_notification::persistent_toast_notification(
+            "Update Failed",
+            "Automatic update failed. Trying manual update.",
+        );
+        run_kaku_update_from_menu();
+        return;
+    }
+
+    log::info!(
+        "restart_to_update: helper spawned for {} -> {}",
+        info.tag,
+        target_app.display()
+    );
+}
+
 pub fn run_kaku_doctor_in_new_tab() {
     run_kaku_subcommand_in_new_tab("doctor", None);
 }
@@ -195,21 +267,29 @@ fn run_kaku_subcommand_in_new_tab(subcommand: &str, running_flag: Option<&'stati
     // environment) is inherited and ~/.zprofile is never loaded, so curl hits
     // api.github.com without a proxy -- causing 30+ second timeouts on Chinese
     // networks. The extra few hundred ms of profile loading is negligible.
+    // When launched from the GUI for `update`, set KAKU_UPDATE_AUTO_CONFIRM=1
+    // so the CLI skips the interactive "Press Enter" confirmation.
+    let env_prefix = if subcommand == "update" {
+        "KAKU_UPDATE_AUTO_CONFIRM=1 "
+    } else {
+        ""
+    };
+    // After the subcommand finishes, sleep briefly so the user can read the
+    // output before the helper script kills the process. No interactive
+    // "Press Enter to close" prompt that leaves a dead tab.
     let shell_args = if shell_name == "fish" {
         vec![
             shell.clone(),
             "-l".to_string(),
             "-i".to_string(),
             "-c".to_string(),
-            format!("{fallback_bin} {subcommand}; printf '\\nPress Enter to close...\\n'; read -l dummy"),
+            format!("{env_prefix}{fallback_bin} {subcommand}; sleep 2"),
         ]
     } else {
         vec![
             shell.clone(),
             "-lic".to_string(),
-            format!(
-                "{fallback_bin} {subcommand}; printf '\\nPress Enter to close...\\n'; read dummy"
-            ),
+            format!("{env_prefix}{fallback_bin} {subcommand}; sleep 2"),
         ]
     };
 

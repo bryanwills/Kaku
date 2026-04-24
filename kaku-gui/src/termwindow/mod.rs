@@ -4380,6 +4380,8 @@ impl TermWindow {
                     .detach();
                 } else if name == "update-kaku" || name == "run-kaku-update" {
                     crate::frontend::run_kaku_update_from_menu();
+                } else if name == "restart-to-update" {
+                    crate::frontend::restart_to_update();
                 } else if name == "run-kaku-cli" {
                     pane.writer().write_all(b"kaku\n")?;
                 } else if name == "run-kaku-ai-config" {
