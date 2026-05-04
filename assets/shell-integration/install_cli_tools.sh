@@ -114,10 +114,54 @@ ensure_homebrew_installation() {
 	return 1
 }
 
+version_manager_tool_path() {
+	local tool_name="$1"
+
+	# mise: prefer the canonical shim path so we don't need mise on PATH.
+	local mise_shim="${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims/$tool_name"
+	if [[ -x "$mise_shim" ]]; then
+		echo "$mise_shim"
+		return 0
+	fi
+
+	# mise: ask the binary directly when present (handles non-shim layouts
+	# and respects active versions configured by `mise use -g`).
+	if command -v mise >/dev/null 2>&1; then
+		local mise_path
+		mise_path="$(mise which "$tool_name" 2>/dev/null || true)"
+		if [[ -n "$mise_path" && -x "$mise_path" ]]; then
+			echo "$mise_path"
+			return 0
+		fi
+	fi
+
+	# asdf shims live at a stable path; check before invoking asdf.
+	local asdf_shim="${ASDF_DATA_DIR:-$HOME/.asdf}/shims/$tool_name"
+	if [[ -x "$asdf_shim" ]]; then
+		echo "$asdf_shim"
+		return 0
+	fi
+
+	if command -v asdf >/dev/null 2>&1; then
+		local asdf_path
+		asdf_path="$(asdf which "$tool_name" 2>/dev/null || true)"
+		if [[ -n "$asdf_path" && -x "$asdf_path" ]]; then
+			echo "$asdf_path"
+			return 0
+		fi
+	fi
+
+	return 1
+}
+
 resolved_tool_path() {
 	local tool_name="$1"
 	if command -v "$tool_name" >/dev/null 2>&1; then
 		command -v "$tool_name"
+		return 0
+	fi
+
+	if version_manager_tool_path "$tool_name"; then
 		return 0
 	fi
 
