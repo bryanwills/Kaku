@@ -124,9 +124,9 @@ Big thanks to all contributors who helped build Kaku. Go follow them! ❤️
 
 - If Kaku helped you, [share it](https://twitter.com/intent/tweet?url=https://github.com/tw93/Kaku&text=Kaku%20-%20A%20fast%20terminal%20built%20for%20AI%20coding.) with friends or give it a star.
 - Got ideas or bugs? Open an issue or PR, feel free to contribute your best AI model.
-- I have two cats, TangYuan and Coke. If you think Kaku delights your life, you can feed them <a href="https://miaoyan.app/cats.html?name=Kaku" target="_blank">canned food 🥩</a>.
+- I have two cats, TangYuan and Coke. If you think Kaku delights your life, you can feed them <a href="https://cats.tw93.fun?name=Kaku" target="_blank">canned food 🥩</a>.
 
-<a href="https://miaoyan.app/cats.html?name=Kaku"><img src="https://cdn.jsdelivr.net/gh/tw93/MiaoYan@main/assets/sponsors.svg" width="1000" loading="lazy" /></a>
+<a href="https://cats.tw93.fun?name=Kaku"><img src="https://cdn.jsdelivr.net/gh/tw93/sponsors@main/assets/sponsors.svg" width="1000" loading="lazy" /></a>
 
 ## License
 
