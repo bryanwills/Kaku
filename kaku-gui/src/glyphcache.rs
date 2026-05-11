@@ -785,7 +785,17 @@ impl GlyphCache {
             let y_scale = base_metrics.cell_height.get() / idx_metrics.cell_height.get();
             let y_scaled_width = y_scale * glyph.width as f64;
 
-            if allow_width_overflow || y_scaled_width <= max_pixel_width {
+            // Square color-emoji bitmaps (Apple Color Emoji) assigned to
+            // multiple cells (e.g. emoji + VS16) get squeezed to ~1 cell of
+            // width when scaled by height alone, leaving a visible gap.
+            // Scale to fill the cell advance, capped by cell height so the
+            // glyph never overflows vertically.
+            let is_square_bitmap = glyph_aspect >= 0.9 && glyph_aspect <= 1.25;
+            if is_square_bitmap && num_cells >= 2.0 && glyph.width > 0 {
+                let x_scale = (num_cells * base_metrics.cell_width.get()) / glyph.width as f64;
+                let max_by_height = base_metrics.cell_height.get() / glyph.height as f64;
+                scale = x_scale.min(max_by_height);
+            } else if allow_width_overflow || y_scaled_width <= max_pixel_width {
                 // prefer height-wise scaling
                 scale = y_scale;
             } else {
