@@ -53,18 +53,12 @@ pub fn run(
     let mut terminal = Terminal::new(backend).context("create terminal")?;
 
     let result = run_app(&mut terminal, &mut app);
-    let saved = app.has_saved;
-    let path = app.config_path().display().to_string();
 
     disable_raw_mode().context("disable raw mode")?;
     terminal
         .backend_mut()
         .execute(LeaveAlternateScreen)
         .context("leave alternate screen")?;
-
-    if saved {
-        println!("Config saved to {}", path);
-    }
 
     result
 }
@@ -188,9 +182,9 @@ fn save_with_feedback(
     app.save_if_dirty()?;
 
     terminal
-        .draw(|f| crate::tui_splash::render_splash_with_spinner(f, "Saved", '✓'))
+        .draw(|f| crate::tui_splash::render_splash_with_spinner(f, "Saved", '*'))
         .ok();
-    std::thread::sleep(Duration::from_millis(500));
+    std::thread::sleep(Duration::from_millis(200));
 
     Ok(())
 }
@@ -280,8 +274,6 @@ struct App {
     edit_original: String,
     select_index: usize,
     dirty: bool,
-    /// True if save_config() was called at least once (for signaling on exit)
-    has_saved: bool,
     /// Preserve whether the current window_decorations state keeps resize edges.
     window_decorations_resize: bool,
 }
@@ -452,6 +444,15 @@ impl App {
                 options: vec!["On", "Off"],
                 skip_write: false,
             },
+            ConfigField {
+                section: "Behavior",
+                key: "Restore Previous Session",
+                lua_key: "restore_previous_session",
+                value: String::new(),
+                default: "Off".into(),
+                options: vec!["On", "Off"],
+                skip_write: false,
+            },
         ];
 
         Self {
@@ -464,7 +465,6 @@ impl App {
             edit_original: String::new(),
             select_index: 0,
             dirty: false,
-            has_saved: false,
             window_decorations_resize: true,
         }
     }
@@ -830,7 +830,8 @@ impl App {
             | "bell_tab_indicator"
             | "bell_dock_badge"
             | "remember_last_cwd"
-            | "tab_title_show_basename_only" => {
+            | "tab_title_show_basename_only"
+            | "restore_previous_session" => {
                 if raw == "true" {
                     Some("On".into())
                 } else if raw == "false" {
@@ -928,7 +929,6 @@ impl App {
         if self.dirty {
             self.save_config()?;
             self.dirty = false;
-            self.has_saved = true;
             // Signal immediately while the pane's stdout is still being read by
             // kaku-gui. Sending after LeaveAlternateScreen is unreliable because
             // the terminal may have already closed the child's output stream.
@@ -1270,7 +1270,51 @@ impl App {
 
     fn update_lua_config(&self, content: &str, field: &ConfigField) -> String {
         let lua_value = self.to_lua_value(field);
-        self.set_lua_config(content, field.lua_key, &lua_value)
+        let content = if field.lua_key == "color_scheme" {
+            Self::strip_managed_theme_blocks(content)
+        } else {
+            content.to_string()
+        };
+        self.set_lua_config(&content, field.lua_key, &lua_value)
+    }
+
+    fn strip_managed_theme_blocks(content: &str) -> String {
+        let (content, _) =
+            Self::strip_theme_block(content, "-- ===== Kaku Theme Defaults (managed) =====");
+        let (content, _) = Self::strip_theme_block(&content, "-- ===== Kaku Theme =====");
+        content
+    }
+
+    fn strip_theme_block(content: &str, marker: &str) -> (String, bool) {
+        let lines: Vec<&str> = content.lines().collect();
+        let Some(start) = lines.iter().position(|line| line.contains(marker)) else {
+            return (content.to_string(), false);
+        };
+
+        // Older Kaku versions appended managed colors/window_frame just before
+        // `return config`. Only remove blocks with that clear terminator.
+        let Some(return_idx) = lines
+            .iter()
+            .enumerate()
+            .skip(start + 1)
+            .find(|(_, line)| line.trim() == "return config")
+            .map(|(idx, _)| idx)
+        else {
+            return (content.to_string(), false);
+        };
+
+        let mut out = Vec::new();
+        out.extend_from_slice(&lines[..start]);
+        if !out.iter().any(|line| line.trim() == "return config") {
+            out.push("return config");
+        }
+        out.extend_from_slice(&lines[return_idx + 1..]);
+
+        let mut merged = out.join("\n");
+        if !merged.is_empty() {
+            merged.push('\n');
+        }
+        (merged, true)
     }
 
     /// Insert or replace a `config.<lua_key> = <lua_value>` line in the config.
@@ -1361,7 +1405,8 @@ impl App {
             | "bell_tab_indicator"
             | "bell_dock_badge"
             | "remember_last_cwd"
-            | "tab_title_show_basename_only" => {
+            | "tab_title_show_basename_only"
+            | "restore_previous_session" => {
                 if field.value == "On" {
                     "true".into()
                 } else {
@@ -1522,6 +1567,67 @@ mod tests {
             app.to_lua_value(&app.fields[idx]),
             KAKU_AUTO_COLOR_SCHEME_EXPR
         );
+    }
+
+    #[test]
+    fn color_scheme_update_strips_legacy_managed_theme_block() {
+        let mut app = test_app();
+        let idx = app
+            .fields
+            .iter()
+            .position(|f| f.lua_key == "color_scheme")
+            .expect("color_scheme field to exist");
+        app.fields[idx].value = "Kaku Light".to_string();
+
+        let content = "\
+local wezterm = require 'wezterm'
+local config = {}
+
+-- ===== Kaku Theme =====
+config.colors = {
+  foreground = '#d4d4d4',
+  background = '#1e1e1e',
+}
+config.window_frame = {
+  active_titlebar_bg = '#1e1e1e',
+}
+config.color_scheme = 'Kaku Dark'
+return config
+";
+
+        let updated = app.update_lua_config(content, &app.fields[idx]);
+
+        assert!(!updated.contains("-- ===== Kaku Theme ====="));
+        assert!(!updated.contains("config.colors"));
+        assert!(!updated.contains("config.window_frame"));
+        assert!(updated.contains("config.color_scheme = 'Kaku Light'"));
+        assert!(updated.contains("return config"));
+    }
+
+    #[test]
+    fn color_scheme_update_preserves_user_color_overrides_without_managed_marker() {
+        let mut app = test_app();
+        let idx = app
+            .fields
+            .iter()
+            .position(|f| f.lua_key == "color_scheme")
+            .expect("color_scheme field to exist");
+        app.fields[idx].value = "Kaku Light".to_string();
+
+        let content = "\
+local config = {}
+config.colors = {
+  background = '#111111',
+}
+config.color_scheme = 'Kaku Dark'
+return config
+";
+
+        let updated = app.update_lua_config(content, &app.fields[idx]);
+
+        assert!(updated.contains("config.colors"));
+        assert!(updated.contains("background = '#111111'"));
+        assert!(updated.contains("config.color_scheme = 'Kaku Light'"));
     }
 
     #[test]

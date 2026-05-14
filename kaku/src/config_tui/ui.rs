@@ -258,7 +258,7 @@ fn render_fields(frame: &mut ratatui::Frame, area: Rect, app: &App) {
     let mut items: Vec<ListItem> = Vec::new();
     let mut selected_flat: Option<usize> = None;
     let mut flat = 0usize;
-    let key_width = 24usize;
+    let key_width = 26usize;
     let mut current_section: Option<&str> = None;
 
     for (idx, field) in app.fields.iter().enumerate() {

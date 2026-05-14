@@ -4601,6 +4601,14 @@ fn status_value_for_display(field_key: &str, new_val: &str) -> String {
     new_val.to_string()
 }
 
+fn field_accepts_custom_select_value(tool: Tool, field_key: &str) -> bool {
+    tool == Tool::KakuAssistant
+        && matches!(
+            field_key,
+            "Simple Model" | "Deep Model" | "Model" | "Chat Model"
+        )
+}
+
 impl App {
     fn new() -> Self {
         let tools = Self::load_tools();
@@ -5134,16 +5142,12 @@ impl App {
             options,
             filtered,
             selected,
-            ..
+            filter,
         } = std::mem::replace(&mut self.mode, AppMode::Browsing)
         else {
             return;
         };
         self.focus = Focus::ToolList;
-
-        let Some(option_idx) = filtered.get(selected).copied() else {
-            return;
-        };
 
         let Some((tool_kind, field_key, old_val)) = self.current_tool().and_then(|tool| {
             tool.fields
@@ -5153,8 +5157,14 @@ impl App {
             return;
         };
         self.field_index = self.display_index_for_field(tool_kind, field_idx);
-        let Some(new_val) = options.get(option_idx).cloned() else {
-            return;
+        let new_val = match filtered.get(selected).and_then(|idx| options.get(*idx)) {
+            Some(option) => option.clone(),
+            None if field_accepts_custom_select_value(tool_kind, &field_key)
+                && !filter.trim().is_empty() =>
+            {
+                filter.trim().to_string()
+            }
+            None => return,
         };
 
         if new_val == old_val {
@@ -6256,6 +6266,23 @@ mod tests {
         assert!(fields.iter().any(|field| field.key == "Enabled"));
         let fields = extract_kaku_assistant_fields("enabled = false\n");
         assert!(fields.iter().any(|field| field.key == "Enabled"));
+    }
+
+    #[test]
+    fn kaku_assistant_model_fields_accept_custom_select_values() {
+        assert!(field_accepts_custom_select_value(
+            Tool::KakuAssistant,
+            "Simple Model"
+        ));
+        assert!(field_accepts_custom_select_value(
+            Tool::KakuAssistant,
+            "Deep Model"
+        ));
+        assert!(!field_accepts_custom_select_value(
+            Tool::KakuAssistant,
+            "Web Search"
+        ));
+        assert!(!field_accepts_custom_select_value(Tool::Codex, "Model"));
     }
 
     #[test]

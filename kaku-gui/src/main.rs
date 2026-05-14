@@ -478,6 +478,26 @@ async fn async_run_terminal_gui(
             trigger_and_log_gui_attached(MuxDomain(domain.domain_id())).await;
         }
     }
+    if cmd.is_none() && domain.is_none() && !is_connecting {
+        let config = config::configuration();
+        if config.restore_previous_session {
+            startup_trace::mark("  auto-restore session start");
+            match session_restore::try_restore_on_startup().await {
+                Ok(true) => {
+                    log::info!("auto-restored previous session from snapshot");
+                    startup_trace::mark("  auto-restore session done");
+                    return Ok(());
+                }
+                Ok(false) => {
+                    log::debug!("no session snapshot available; normal startup");
+                }
+                Err(err) => {
+                    log::warn!("auto-restore failed, falling back: {err:#}");
+                }
+            }
+        }
+    }
+
     startup_trace::mark("  spawn_tab_in_domain_if_mux_is_empty start");
     let res = spawn_tab_in_domain_if_mux_is_empty(cmd, is_connecting, domain, opts.workspace).await;
     startup_trace::mark("  spawn_tab_in_domain_if_mux_is_empty done");

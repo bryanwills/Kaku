@@ -502,6 +502,16 @@ pub fn restore_previous_window_from_menu() {
     .detach();
 }
 
+pub async fn try_restore_on_startup() -> anyhow::Result<bool> {
+    match load_snapshot()? {
+        Some(snapshot) => {
+            restore_snapshot(snapshot).await?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
