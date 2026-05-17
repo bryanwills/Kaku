@@ -26,6 +26,12 @@ const INLINE_CURSOR: &[Poly] = &[Poly {
     style: PolyStyle::Outline,
 }];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RenameFontKind {
+    Terminal,
+    Title,
+}
+
 pub struct TabRenameModal {
     element: RefCell<Option<Vec<ComputedElement>>>,
     tab_id: TabId,
@@ -139,6 +145,58 @@ impl TabRenameModal {
             - border_leading.evaluate_as_pixels(context)
             - border_trailing.evaluate_as_pixels(context))
         .max(1.0)
+    }
+
+    fn font_kind(use_fancy_tab_bar: bool) -> RenameFontKind {
+        if use_fancy_tab_bar {
+            RenameFontKind::Title
+        } else {
+            RenameFontKind::Terminal
+        }
+    }
+
+    fn editor_padding(metrics: &RenderMetrics, use_fancy_tab_bar: bool) -> BoxDimension {
+        Self::editor_padding_for_cell_width(metrics.cell_size.width as f32, use_fancy_tab_bar)
+    }
+
+    fn editor_padding_for_cell_width(cell_width: f32, use_fancy_tab_bar: bool) -> BoxDimension {
+        let horizontal = Dimension::Pixels((0.5 * cell_width) + 4.0);
+        if use_fancy_tab_bar {
+            BoxDimension {
+                left: horizontal,
+                right: horizontal,
+                top: Dimension::Cells(0.2),
+                bottom: Dimension::Cells(0.25),
+            }
+        } else {
+            BoxDimension {
+                left: horizontal,
+                right: horizontal,
+                top: Dimension::Pixels(0.0),
+                bottom: Dimension::Pixels(0.0),
+            }
+        }
+    }
+
+    fn editor_border(use_fancy_tab_bar: bool) -> BoxDimension {
+        if use_fancy_tab_bar {
+            BoxDimension::new(Dimension::Pixels(1.0))
+        } else {
+            BoxDimension::new(Dimension::Pixels(0.0))
+        }
+    }
+
+    fn row_margin(use_fancy_tab_bar: bool) -> BoxDimension {
+        if use_fancy_tab_bar {
+            BoxDimension {
+                left: Dimension::Pixels(0.0),
+                right: Dimension::Pixels(0.0),
+                top: Dimension::Pixels(1.0),
+                bottom: Dimension::Pixels(-1.0),
+            }
+        } else {
+            BoxDimension::default()
+        }
     }
 
     fn value_len(&self) -> usize {
@@ -536,8 +594,8 @@ impl TabRenameModal {
         .margin(BoxDimension {
             left: Dimension::Pixels(1.0),
             right: Dimension::Pixels(-3.0),
-            top: Dimension::Pixels(5.0),
-            bottom: Dimension::Pixels(-5.0),
+            top: Dimension::Pixels(0.0),
+            bottom: Dimension::Pixels(0.0),
         })
         .colors(ElementColors {
             border: BorderColor::default(),
@@ -618,13 +676,25 @@ impl TabRenameModal {
     }
 
     fn compute(&self, term_window: &mut TermWindow) -> anyhow::Result<Vec<ComputedElement>> {
-        let font = term_window
-            .fonts
-            .title_font()
-            .context("resolve tab rename font")?;
+        let use_fancy_tab_bar = term_window.config.use_fancy_tab_bar;
+        let font = match Self::font_kind(use_fancy_tab_bar) {
+            RenameFontKind::Title => term_window
+                .fonts
+                .title_font()
+                .context("resolve tab rename title font")?,
+            RenameFontKind::Terminal => term_window
+                .fonts
+                .default_font()
+                .context("resolve tab rename terminal font")?,
+        };
         let metrics = RenderMetrics::with_font_metrics(&font.metrics());
         let palette = term_window.palette().clone();
         let (element_colors, border_corners) = self.colors(term_window, &palette);
+        let border_corners = if use_fancy_tab_bar {
+            border_corners
+        } else {
+            None
+        };
         let text_attrs = self.title_text_attrs(term_window);
         let text = match &element_colors.text {
             InheritableColor::Color(color) => *color,
@@ -667,13 +737,8 @@ impl TabRenameModal {
 
         let height = self.anchor.height.max(1) as f32;
         let y = self.anchor.y as f32;
-        let padding = BoxDimension {
-            left: Dimension::Pixels((0.5 * metrics.cell_size.width as f32) + 4.0),
-            right: Dimension::Pixels((0.5 * metrics.cell_size.width as f32) + 4.0),
-            top: Dimension::Cells(0.2),
-            bottom: Dimension::Cells(0.25),
-        };
-        let border = BoxDimension::new(Dimension::Pixels(1.0));
+        let padding = Self::editor_padding(&metrics, use_fancy_tab_bar);
+        let border = Self::editor_border(use_fancy_tab_bar);
 
         let mut row = vec![];
         let cursor_element_idx;
@@ -777,12 +842,7 @@ impl TabRenameModal {
 
         let row = Element::new(&font, ElementContent::Children(row))
             .vertical_align(VerticalAlign::Middle)
-            .margin(BoxDimension {
-                left: Dimension::Pixels(0.0),
-                right: Dimension::Pixels(0.0),
-                top: Dimension::Pixels(1.0),
-                bottom: Dimension::Pixels(-1.0),
-            });
+            .margin(Self::row_margin(use_fancy_tab_bar));
         let content_min_width = Self::content_min_extent(
             min_width,
             padding.left,
@@ -834,6 +894,41 @@ impl TabRenameModal {
         Self::update_text_cursor_position(term_window, &computed, cursor_element_idx);
 
         Ok(vec![computed])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plain_tab_bar_rename_uses_terminal_font_and_compact_vertical_chrome() {
+        assert_eq!(TabRenameModal::font_kind(false), RenameFontKind::Terminal);
+
+        let padding = TabRenameModal::editor_padding_for_cell_width(12.0, false);
+        assert_eq!(padding.top, Dimension::Pixels(0.0));
+        assert_eq!(padding.bottom, Dimension::Pixels(0.0));
+
+        let border = TabRenameModal::editor_border(false);
+        assert_eq!(border.top, Dimension::Pixels(0.0));
+        assert_eq!(border.bottom, Dimension::Pixels(0.0));
+
+        let margin = TabRenameModal::row_margin(false);
+        assert_eq!(margin.top, Dimension::Pixels(0.0));
+        assert_eq!(margin.bottom, Dimension::Pixels(0.0));
+    }
+
+    #[test]
+    fn fancy_tab_bar_rename_keeps_title_font_and_tab_chrome() {
+        assert_eq!(TabRenameModal::font_kind(true), RenameFontKind::Title);
+
+        let padding = TabRenameModal::editor_padding_for_cell_width(12.0, true);
+        assert_eq!(padding.top, Dimension::Cells(0.2));
+        assert_eq!(padding.bottom, Dimension::Cells(0.25));
+
+        let border = TabRenameModal::editor_border(true);
+        assert_eq!(border.top, Dimension::Pixels(1.0));
+        assert_eq!(border.bottom, Dimension::Pixels(1.0));
     }
 }
 
