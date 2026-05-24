@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>贡献 · Kaku Docs</title>
+  <meta name="description" content="参与 Kaku 开发：本地环境准备、构建命令、Pull Request 流程和 CI 检查项。">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://kaku.fun/docs/contributing">
+  <link rel="alternate" hreflang="en" href="https://kaku.fun/en/docs/contributing">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到正文</a>
+  <nav class="site-nav" aria-label="主导航"><div class="wide nav-inner"><a class="brand" href="/"><strong>Kaku</strong></a><div class="nav-links"><a href="/docs/" aria-current="page">文档</a></div><div class="nav-actions"><a class="nav-pill" aria-current="page" href="/docs/contributing" hreflang="zh-CN">中</a><a class="nav-pill" href="/en/docs/contributing" hreflang="en">EN</a><a class="nav-pill primary" href="https://github.com/tw93/Kaku" target="_blank" rel="noopener noreferrer"><span>GitHub</span> ★</a></div></div></nav>
+  <main id="main-content" class="docs-page">
+    <header class="page-hero doc-hero"><div class="wide"><span class="label">Docs</span><h1>贡献</h1><p>把代码贡献到 Kaku：环境准备、日常构建命令、PR 流程和 CI 检查项。</p></div></header>
+    <section class="section docs-section">
+      <div class="wide docs-layout">
+        <aside class="docs-sidebar">
+          <a class="docs-home" href="/docs/">文档</a>
+          <nav class="docs-menu" aria-label="文档列表"><a href="/docs/install"><span>安装</span><small>DMG、Homebrew、源码构建、诊断和安装问题排查。</small></a><a href="/docs/features"><span>功能与 AI</span><small>Kaku Assistant、AI Chat、错误修复、自然语言命令，以及内置 shell 工具。</small></a><a href="/docs/cli"><span>CLI 参考</span><small>从 shell 打开 AI 设置、聊天、配置、诊断、更新和 multiplexer 命令。</small></a><a href="/docs/configuration"><span>配置</span><small>Kaku 的 Lua 配置入口、外观、终端行为、键盘与 Assistant 设置。</small></a><a href="/docs/keybindings"><span>快捷键</span><small>窗口、标签、分屏、Shell 编辑、AI 功能、Lazygit 和 Yazi 的默认快捷键。</small></a><a href="/docs/faq"><span>FAQ</span><small>安装、配置、快捷键、AI Provider、滚动、字体、Homebrew 和通知问题。</small></a><a href="/docs/contributing" aria-current="page"><span>贡献</span><small>本地环境、构建命令、PR 流程和 CI 检查项。</small></a><a href="/docs/release-checklist"><span>发布检查</span><small>维护者发布前需要手动确认的 macOS tab bar、透明窗口和 issue triage 检查。</small></a></nav>
+          <div class="section-toc"><p>本页目录</p><a class="depth-2" href="#setup">环境准备</a><a class="depth-2" href="#development">日常开发</a><a class="depth-2" href="#build-release">发布构建</a><a class="depth-2" href="#pull-requests">Pull Request</a></div>
+        </aside>
+        <article class="doc-content">
+          <h2 id="setup"><a class="anchor" href="#setup" aria-label="Link to 环境准备">#</a>环境准备</h2>
+          <p>克隆仓库，装 Rust 工具链，再装本地开发需要的工具和 git hook。</p>
+          <pre><code class="language-bash">git clone https://github.com/tw93/Kaku.git
+cd Kaku
+
+# Homebrew 把 rustup 装在 keg-only，需要手动 export PATH
+brew install rustup
+echo "export PATH=\"$(brew --prefix rustup)/bin:\$HOME/.cargo/bin:\$PATH\"" >> ~/.zprofile
+exec zsh -l
+rustup toolchain install 1.93.0
+
+# 装 cargo-nextest、cargo-watch、nightly rustfmt
+make install-tools
+
+# 装 pre-commit hook：每次提交前会跑 format + test
+make install-hooks</code></pre>
+          <h2 id="development"><a class="anchor" href="#development" aria-label="Link to 日常开发">#</a>日常开发</h2>
+          <p>常用 Make 目标如下，覆盖格式化、类型检查、测试和本地运行。</p>
+          <table>
+            <thead><tr><th>命令</th><th>用途</th></tr></thead>
+            <tbody>
+              <tr><td><code>make fmt</code></td><td>自动格式化代码，需要 nightly Rust</td></tr>
+              <tr><td><code>make fmt-check</code></td><td>只检查格式，不修改文件</td></tr>
+              <tr><td><code>make check</code></td><td>cargo check，捕获类型和语法错误</td></tr>
+              <tr><td><code>make test</code></td><td>跑单元测试</td></tr>
+              <tr><td><code>make dev</code></td><td>本地快速 debug 运行，从 <code>target/debug</code> 启动 <code>kaku-gui</code></td></tr>
+              <tr><td><code>make build</code></td><td>编译二进制，不打 app bundle</td></tr>
+              <tr><td><code>make app</code></td><td>编译 debug app bundle 到 <code>dist/Kaku.app</code></td></tr>
+            </tbody>
+          </table>
+          <p>推荐的开发循环：</p>
+          <pre><code class="language-bash">make fmt        # 先格式化
+make check      # 确认能编译
+make test       # 跑测试
+make dev        # 本地快速运行，不打包</code></pre>
+          <p>需要调整日志等级时给 <code>make dev</code> 加环境变量：</p>
+          <pre><code class="language-bash">RUST_LOG=debug make dev</code></pre>
+          <h2 id="build-release"><a class="anchor" href="#build-release" aria-label="Link to 发布构建">#</a>发布构建</h2>
+          <p>本地复现发布产物的几条命令，正式发布走 <code>scripts/release.sh</code>。</p>
+          <pre><code class="language-bash"># 完整发布：app + DMG，universal 二进制
+./scripts/build.sh
+# 输出：dist/Kaku.app 和 dist/Kaku.dmg
+
+# 只为当前架构构建，速度更快，本地测试用
+./scripts/build.sh --native-arch
+
+# 只打 app bundle，跳过 DMG
+./scripts/build.sh --native-arch --app-only
+
+# 构建完直接打开 app
+./scripts/build.sh --native-arch --open</code></pre>
+          <h2 id="pull-requests"><a class="anchor" href="#pull-requests" aria-label="Link to Pull Request">#</a>Pull Request</h2>
+          <ol>
+            <li>Fork 仓库，从 <code>main</code> 切出分支。</li>
+            <li>改代码。</li>
+            <li>本地跑 <code>make fmt &amp;&amp; make check &amp;&amp; make test</code>。</li>
+            <li>提交并推送。</li>
+            <li>开 PR，目标分支选 <code>main</code>。</li>
+          </ol>
+          <p>CI 顺序：format check，单元测试，cargo check，universal 二进制构建验证。任意一步红就需要先修复。</p>
+          <p><a href="https://github.com/tw93/Kaku/pulls" target="_blank" rel="noopener noreferrer">查看现有 Pull Requests</a></p>
+          <nav class="doc-pager" aria-label="文档翻页"><a href="/docs/faq"><span>上一篇</span><strong>FAQ</strong></a><a href="/docs/release-checklist"><span>下一篇</span><strong>发布检查</strong></a></nav>
+        </article>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="wide"><div class="footer-brand"><a href="/">Kaku</a><p>AI 编码时代的 macOS 终端。</p></div><div class="footer-cols"><div class="footer-col"><h2>产品</h2><a href="/roadmap">Roadmap</a><a href="/changelog">Changelog</a><a href="https://github.com/tw93/Kaku/releases" target="_blank" rel="noopener noreferrer">Releases</a></div><div class="footer-col"><h2>文档</h2><a href="/docs/install">安装</a><a href="/docs/features">AI 功能</a><a href="/docs/configuration">配置</a></div><div class="footer-col"><h2>社区</h2><a href="https://github.com/tw93/Kaku">GitHub</a><a href="https://github.com/tw93/Kaku/issues">Issues</a><a href="https://twitter.com/HiTw93">X / Twitter</a></div><div class="footer-col"><h2>项目</h2><a href="https://github.com/wez/wezterm">Built on WezTerm</a><a href="https://github.com/tw93/Kaku/blob/main/LICENSE.md">MIT License</a><a href="https://github.com/tw93">Tw93</a></div></div><div class="footer-bottom">Kaku · Built on WezTerm · MIT License · © 2026 Tw93</div></div></footer>
+</body>
+</html>

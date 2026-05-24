@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contributing · Kaku Docs</title>
+  <meta name="description" content="Contribute to Kaku: local setup, build commands, Pull Request workflow, and CI checks.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://kaku.fun/en/docs/contributing">
+  <link rel="alternate" hreflang="zh-CN" href="https://kaku.fun/docs/contributing">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <nav class="site-nav" aria-label="Primary navigation"><div class="wide nav-inner"><a class="brand" href="/en/"><strong>Kaku</strong></a><div class="nav-links"><a href="/en/docs/" aria-current="page">Docs</a></div><div class="nav-actions"><a class="nav-pill" href="/docs/contributing" hreflang="zh-CN">中</a><a class="nav-pill" aria-current="page" href="/en/docs/contributing" hreflang="en">EN</a><a class="nav-pill primary" href="https://github.com/tw93/Kaku" target="_blank" rel="noopener noreferrer"><span>GitHub</span> ★</a></div></div></nav>
+  <main id="main-content" class="docs-page">
+    <header class="page-hero doc-hero"><div class="wide"><span class="label">Docs</span><h1>Contributing</h1><p>Ship code to Kaku: local setup, day-to-day build commands, Pull Request flow, and CI checks.</p></div></header>
+    <section class="section docs-section">
+      <div class="wide docs-layout">
+        <aside class="docs-sidebar">
+          <a class="docs-home" href="/en/docs/">Docs</a>
+          <nav class="docs-menu" aria-label="Docs list"><a href="/en/docs/install"><span>Install</span><small>DMG, Homebrew, source build, diagnostics, and install troubleshooting.</small></a><a href="/en/docs/features"><span>Features &amp; AI</span><small>Kaku Assistant, AI Chat, command fixes, natural-language commands, and built-in shell tools.</small></a><a href="/en/docs/cli"><span>CLI</span><small>Open AI settings, chat, config, doctor, update, and multiplexer commands from the shell.</small></a><a href="/en/docs/configuration"><span>Configuration</span><small>Kaku's Lua config entry, appearance, terminal behavior, keyboard, and Assistant settings.</small></a><a href="/en/docs/keybindings"><span>Keybindings</span><small>Default shortcuts for windows, tabs, splits, shell editing, AI, Lazygit, and Yazi.</small></a><a href="/en/docs/faq"><span>FAQ</span><small>Install, config, shortcuts, AI Provider, scrolling, fonts, Homebrew, and notifications.</small></a><a href="/en/docs/contributing" aria-current="page"><span>Contributing</span><small>Local setup, build commands, PR workflow, and CI checks.</small></a><a href="/en/docs/release-checklist"><span>Release Checklist</span><small>Manual checks maintainers run before release: macOS tab bar, transparent windows, issue triage.</small></a></nav>
+          <div class="section-toc"><p>On this page</p><a class="depth-2" href="#setup">Setup</a><a class="depth-2" href="#development">Development</a><a class="depth-2" href="#build-release">Build Release</a><a class="depth-2" href="#pull-requests">Pull Requests</a></div>
+        </aside>
+        <article class="doc-content">
+          <h2 id="setup"><a class="anchor" href="#setup" aria-label="Link to Setup">#</a>Setup</h2>
+          <p>Clone the repo, install the Rust toolchain, then install the local dev tools and the git hook.</p>
+          <pre><code class="language-bash">git clone https://github.com/tw93/Kaku.git
+cd Kaku
+
+# Install Rust if it isn't already available (Homebrew keeps rustup keg-only)
+brew install rustup
+echo "export PATH=\"$(brew --prefix rustup)/bin:\$HOME/.cargo/bin:\$PATH\"" >> ~/.zprofile
+exec zsh -l
+rustup toolchain install 1.93.0
+
+# Install required tools (cargo-nextest, cargo-watch, nightly rustfmt)
+make install-tools
+
+# Install pre-commit hook (format + test before each commit)
+make install-hooks</code></pre>
+          <h2 id="development"><a class="anchor" href="#development" aria-label="Link to Development">#</a>Development</h2>
+          <p>Make targets cover formatting, type checks, tests, and local runs.</p>
+          <table>
+            <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code>make fmt</code></td><td>Auto-format code, requires nightly Rust</td></tr>
+              <tr><td><code>make fmt-check</code></td><td>Check formatting without modifying files</td></tr>
+              <tr><td><code>make check</code></td><td>Compile check, catch type and syntax errors</td></tr>
+              <tr><td><code>make test</code></td><td>Run unit tests</td></tr>
+              <tr><td><code>make dev</code></td><td>Fast local debug: build <code>kaku-gui</code> and run from <code>target/debug</code></td></tr>
+              <tr><td><code>make build</code></td><td>Compile binaries (no app bundle)</td></tr>
+              <tr><td><code>make app</code></td><td>Build debug app bundle to <code>dist/Kaku.app</code></td></tr>
+            </tbody>
+          </table>
+          <p>Recommended workflow:</p>
+          <pre><code class="language-bash">make fmt        # format first
+make check      # verify it compiles
+make test       # run tests
+make dev        # fast local run without packaging</code></pre>
+          <p>Override the log level for <code>make dev</code>:</p>
+          <pre><code class="language-bash">RUST_LOG=debug make dev</code></pre>
+          <h2 id="build-release"><a class="anchor" href="#build-release" aria-label="Link to Build Release">#</a>Build Release</h2>
+          <p>Reproduce release artifacts locally. Official releases run through <code>scripts/release.sh</code>.</p>
+          <pre><code class="language-bash"># Build app and DMG, release, universal binary
+./scripts/build.sh
+# Outputs: dist/Kaku.app and dist/Kaku.dmg
+
+# Build for current architecture only, faster for local testing
+./scripts/build.sh --native-arch
+
+# Build app bundle only, skip DMG creation
+./scripts/build.sh --native-arch --app-only
+
+# Build and open the app automatically
+./scripts/build.sh --native-arch --open</code></pre>
+          <h2 id="pull-requests"><a class="anchor" href="#pull-requests" aria-label="Link to Pull Requests">#</a>Pull Requests</h2>
+          <ol>
+            <li>Fork the repo and branch from <code>main</code>.</li>
+            <li>Make your changes.</li>
+            <li>Run <code>make fmt &amp;&amp; make check &amp;&amp; make test</code> locally.</li>
+            <li>Commit and push.</li>
+            <li>Open a PR targeting <code>main</code>.</li>
+          </ol>
+          <p>CI runs in order: format check, unit tests, cargo check, universal build validation. Any red step needs to be fixed first.</p>
+          <p><a href="https://github.com/tw93/Kaku/pulls" target="_blank" rel="noopener noreferrer">Browse open Pull Requests</a></p>
+          <nav class="doc-pager" aria-label="Docs pagination"><a href="/en/docs/faq"><span>Previous</span><strong>FAQ</strong></a><a href="/en/docs/release-checklist"><span>Next</span><strong>Release Checklist</strong></a></nav>
+        </article>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="wide"><div class="footer-brand"><a href="/en/">Kaku</a><p>A macOS terminal for AI coding.</p></div><div class="footer-cols"><div class="footer-col"><h2>Product</h2><a href="/en/roadmap">Roadmap</a><a href="/en/changelog">Changelog</a><a href="https://github.com/tw93/Kaku/releases" target="_blank" rel="noopener noreferrer">Releases</a></div><div class="footer-col"><h2>Docs</h2><a href="/en/docs/install">Install</a><a href="/en/docs/features">Features</a><a href="/en/docs/configuration">Configuration</a></div><div class="footer-col"><h2>Community</h2><a href="https://github.com/tw93/Kaku">GitHub</a><a href="https://github.com/tw93/Kaku/issues">Issues</a><a href="https://twitter.com/HiTw93">X / Twitter</a></div><div class="footer-col"><h2>Project</h2><a href="https://github.com/wez/wezterm">Built on WezTerm</a><a href="https://github.com/tw93/Kaku/blob/main/LICENSE.md">MIT License</a><a href="https://github.com/tw93">Tw93</a></div></div><div class="footer-bottom">Kaku · Built on WezTerm · MIT License · © 2026 Tw93</div></div></footer>
+</body>
+</html>
