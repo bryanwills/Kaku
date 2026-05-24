@@ -24,6 +24,7 @@
       <a class="brand" href="/"><strong>Kaku</strong></a>
       <div class="nav-links"><a href="/docs/">文档</a></div>
       <div class="nav-actions">
+        <a class="nav-pill" aria-current="page" href="/" hreflang="zh-CN">中</a>
         <a class="nav-pill" href="/en/" hreflang="en">EN</a>
         <a class="nav-pill primary" href="https://github.com/tw93/Kaku" target="_blank" rel="noopener noreferrer"><span>GitHub</span> ★</a>
       </div>
@@ -38,7 +39,7 @@
           <p class="hero-sub">AI 编码时代的 macOS 终端，基于 WezTerm，开箱即用。</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="https://github.com/tw93/Kaku/releases/latest" target="_blank" rel="noopener noreferrer">下载 Kaku</a>
-            <button class="btn btn-secondary copy-command" type="button" data-copy="brew install tw93/tap/kakuku"><code>brew install tw93/tap/kakuku</code><span class="copy-hint" data-copy-hint>复制</span></button>
+            <a class="btn btn-secondary" href="https://github.com/tw93/Kaku" target="_blank" rel="noopener noreferrer">GitHub</a>
           </div>
           <div class="hero-stats" aria-label="Kaku 项目信息">
             <span><b>2.3k</b><small>GitHub stars</small></span>
@@ -64,7 +65,7 @@
         <div class="prose">
           <span class="label">命令修复</span>
           <h2>失败的命令，不再只是一行红字。</h2>
-          <p>失败后给出可审查建议。按 <code>Cmd + Shift + E</code> 放回命令行，危险命令不会自动执行。</p>
+          <p>失败后给出可审查建议，按 <code>Cmd + Shift + E</code> 放回命令行，危险命令不会自动执行。</p>
           <p><a href="/docs/features">了解 AI 功能</a></p>
         </div>
         <div class="terminal-window">
@@ -129,7 +130,7 @@
       <div class="wide">
         <div class="section-head">
           <h2>真实界面，而不是概念插画。</h2>
-          <p>官网第一屏就应该让人看到 Kaku 在终端里长什么样。深色和浅色都围绕同一套 AI-first 工作流。</p>
+          <p>官网第一屏就应该让人看到 Kaku 在终端里长什么样，深色和浅色都围绕同一套 AI-first 工作流。</p>
         </div>
         <div class="gallery">
           <figure class="shot"><img src="/shots/kaku-dark.webp" width="1920" height="1192" loading="lazy" alt="Kaku 深色主题截图"><figcaption>深色主题：AI 编码分屏和终端工具在同一个工作区。</figcaption></figure>
@@ -145,32 +146,24 @@
         <p>Tw93 · <a href="https://twitter.com/HiTw93" target="_blank" rel="noopener noreferrer">@HiTw93</a></p>
       </div>
     </section>
-    <section class="section-tight">
-      <div class="container">
-        <div class="prose">
-          <span class="label">快速开始</span>
-          <h2>三步开跑。</h2>
-        </div>
-        <pre class="code-box">brew install tw93/tap/kakuku
-open -a Kaku
-kaku doctor
-# 或从 GitHub Releases 下载 DMG</pre>
-        <p style="margin-top:16px"><a class="btn btn-primary" href="https://github.com/tw93/Kaku/releases/latest" target="_blank" rel="noopener noreferrer">下载 Kaku</a></p>
-      </div>
-    </section>
     <section class="section">
       <div class="container">
         <div class="prose">
           <span class="label">常见问题</span>
           <h2>常见问题</h2>
         </div>
-        <div class="faq-list">
-          <details><summary>Kaku 和 iTerm2 有什么区别？</summary><p>iTerm2 是成熟的 macOS 终端。Kaku 更聚焦 AI 编码工作流，内建 AI Chat、错误修复、自然语言转命令，并保留 WezTerm 的可定制底座。</p></details>
-          <details><summary>Kaku 和 Warp 有什么区别？</summary><p>Warp 是闭源并偏云端账号体系。Kaku 是 MIT 开源，不需要账号，AI 请求只发往你配置的 Provider。</p></details>
-          <details><summary>Kaku 收费吗？</summary><p>不收费。Kaku 是 MIT 协议的开源项目。</p></details>
-          <details><summary>支持 Windows 或 Linux 吗？</summary><p>暂时不支持。当前重点是先把 macOS 原生体验打磨稳定。</p></details>
-          <details><summary>Homebrew 装哪个包？</summary><p>使用 <code>brew install tw93/tap/kakuku</code>。Homebrew 上曾有无关的 <code>kaku</code> 包，使用 tap 可以避免装错。</p></details>
-        </div>
+        <dl class="faq">
+          <dt>怎么安装？</dt>
+          <dd>从 <a href="https://github.com/tw93/Kaku/releases/latest" target="_blank" rel="noopener noreferrer">GitHub Releases</a> 下载 DMG，或用 Homebrew tap：<code>brew install tw93/tap/kakuku</code>，Homebrew 上曾有无关的 <code>kaku</code> 包，使用 tap 可以避免装错。</dd>
+          <dt>Kaku 和 iTerm2 有什么区别？</dt>
+          <dd>iTerm2 是成熟的 macOS 终端。Kaku 更聚焦 AI 编码工作流，内建 AI Chat、错误修复、自然语言转命令，并保留 WezTerm 的可定制底座。</dd>
+          <dt>Kaku 和 Warp 有什么区别？</dt>
+          <dd>Warp 是闭源并偏云端账号体系。Kaku 是 MIT 开源，不需要账号，AI 请求只发往你配置的 Provider。</dd>
+          <dt>Kaku 收费吗？</dt>
+          <dd>不收费，Kaku 是 MIT 协议的开源项目。</dd>
+          <dt>支持 Windows 或 Linux 吗？</dt>
+          <dd>暂时不支持，当前重点是先把 macOS 原生体验打磨稳定。</dd>
+        </dl>
       </div>
     </section>
   </main>
@@ -182,6 +175,11 @@ kaku doctor
         <div class="footer-col"><h2>文档</h2><a href="/docs/install">安装</a><a href="/docs/features">AI 功能</a><a href="/docs/configuration">配置</a></div>
         <div class="footer-col"><h2>社区</h2><a href="https://github.com/tw93/Kaku">GitHub</a><a href="https://github.com/tw93/Kaku/issues">Issues</a><a href="https://twitter.com/HiTw93">X / Twitter</a></div>
         <div class="footer-col"><h2>项目</h2><a href="https://github.com/wez/wezterm">Built on WezTerm</a><a href="https://github.com/tw93/Kaku/blob/main/LICENSE.md">MIT License</a><a href="https://github.com/tw93">Tw93</a></div>
+      </div>
+      <div class="footer-thanks">
+        <h2>贡献者</h2>
+        <p>感谢每一位参与 Kaku 的人。</p>
+        <a class="contrib-img" href="https://github.com/tw93/Kaku/graphs/contributors" target="_blank" rel="noopener noreferrer"><img src="https://contrib.rocks/image?repo=tw93/Kaku" alt="Kaku 贡献者头像列表" loading="lazy"></a>
       </div>
       <div class="footer-bottom">Kaku · Built on WezTerm · MIT License · © 2026 Tw93</div>
     </div>

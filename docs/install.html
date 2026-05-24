@@ -12,33 +12,33 @@
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到正文</a>
-  <nav class="site-nav" aria-label="主导航"><div class="wide nav-inner"><a class="brand" href="/"><strong>Kaku</strong></a><div class="nav-links"><a href="/docs/" aria-current="page">文档</a></div><div class="nav-actions"><a class="nav-pill" href="/en/docs/install" hreflang="en">EN</a><a class="nav-pill primary" href="https://github.com/tw93/Kaku" target="_blank" rel="noopener noreferrer"><span>GitHub</span> ★</a></div></div></nav>
+  <nav class="site-nav" aria-label="主导航"><div class="wide nav-inner"><a class="brand" href="/"><strong>Kaku</strong></a><div class="nav-links"><a href="/docs/" aria-current="page">文档</a></div><div class="nav-actions"><a class="nav-pill" aria-current="page" href="/docs/install" hreflang="zh-CN">中</a><a class="nav-pill" href="/en/docs/install" hreflang="en">EN</a><a class="nav-pill primary" href="https://github.com/tw93/Kaku" target="_blank" rel="noopener noreferrer"><span>GitHub</span> ★</a></div></div></nav>
   <main id="main-content" class="docs-page">
     <header class="page-hero doc-hero"><div class="wide"><span class="label">Docs</span><h1>安装</h1><p>把 Kaku 放进 macOS 工作流：下载 DMG、使用 Homebrew，或从源码构建。</p></div></header>
     <section class="section docs-section">
       <div class="wide docs-layout">
         <aside class="docs-sidebar">
           <a class="docs-home" href="/docs/">文档</a>
-          <nav class="docs-menu" aria-label="文档列表"><a href="/docs/install" aria-current="page"><span>安装</span><small>DMG、Homebrew、源码构建、诊断和安装问题排查。</small></a><a href="/docs/features"><span>功能与 AI</span><small>Kaku Assistant、AI Chat、错误修复、自然语言命令，以及内置 shell 工具。</small></a><a href="/docs/cli"><span>CLI 参考</span><small>从 shell 打开 AI 设置、聊天、配置、诊断、更新和 multiplexer 命令。</small></a><a href="/docs/configuration"><span>配置</span><small>Kaku 的 Lua 配置入口、外观、终端行为、键盘与 Assistant 设置。</small></a><a href="/docs/keybindings"><span>快捷键</span><small>窗口、标签、分屏、Shell 编辑、AI 功能、Lazygit 和 Yazi 的默认快捷键。</small></a><a href="/docs/faq"><span>FAQ</span><small>安装、配置、快捷键、AI Provider、滚动、字体、Homebrew 和通知问题。</small></a><a href="/docs/release-checklist"><span>发布检查</span><small>维护者发布前需要手动确认的 macOS tab bar、透明窗口和 issue triage 检查。</small></a></nav>
+          <nav class="docs-menu" aria-label="文档列表"><a href="/docs/install" aria-current="page"><span>安装</span><small>DMG、Homebrew、源码构建、诊断和安装问题排查。</small></a><a href="/docs/features"><span>功能与 AI</span><small>Kaku Assistant、AI Chat、错误修复、自然语言命令，以及内置 shell 工具。</small></a><a href="/docs/cli"><span>CLI 参考</span><small>从 shell 打开 AI 设置、聊天、配置、诊断、更新和 multiplexer 命令。</small></a><a href="/docs/configuration"><span>配置</span><small>Kaku 的 Lua 配置入口、外观、终端行为、键盘与 Assistant 设置。</small></a><a href="/docs/keybindings"><span>快捷键</span><small>窗口、标签、分屏、Shell 编辑、AI 功能、Lazygit 和 Yazi 的默认快捷键。</small></a><a href="/docs/faq"><span>FAQ</span><small>安装、配置、快捷键、AI Provider、滚动、字体、Homebrew 和通知问题。</small></a><a href="/docs/contributing"><span>贡献</span><small>本地环境、构建命令、PR 流程和 CI 检查项。</small></a><a href="/docs/release-checklist"><span>发布检查</span><small>维护者发布前需要手动确认的 macOS tab bar、透明窗口和 issue triage 检查。</small></a></nav>
           <div class="section-toc"><p>本页目录</p><a class="depth-2" href="#dmg">下载 DMG</a><a class="depth-2" href="#homebrew">Homebrew</a><a class="depth-2" href="#source">源码构建</a><a class="depth-2" href="#after-install">安装后</a><a class="depth-2" href="#troubleshooting">排查</a></div>
         </aside>
         <article class="doc-content">
           <h2 id="dmg"><a class="anchor" href="#dmg" aria-label="Link to 下载 DMG">#</a>下载 DMG</h2>
-          <p>推荐大多数用户直接从 GitHub Releases 下载最新 DMG。下载后打开镜像，把 Kaku 拖到 Applications，再从应用列表启动。</p>
+          <p>推荐大多数用户直接从 GitHub Releases 下载最新 DMG，下载后打开镜像，把 Kaku 拖到 Applications，再从应用列表启动。</p>
           <p><a href="https://github.com/tw93/Kaku/releases/latest" target="_blank" rel="noopener noreferrer">打开最新 Release</a></p>
           <h2 id="homebrew"><a class="anchor" href="#homebrew" aria-label="Link to Homebrew">#</a>Homebrew</h2>
           <p>如果你已经用 Homebrew 管理开发工具，可以用 tap 安装 Kaku。</p>
           <pre><code class="language-bash">brew install tw93/tap/kakuku
 open -a Kaku
 kaku doctor</code></pre>
-          <p>Homebrew 适合需要命令行安装和自动化更新的机器。注意包名是 <code>tw93/tap/kakuku</code>，不是 Homebrew 上旧的无关 <code>kaku</code> 包。</p>
+          <p>Homebrew 适合需要命令行安装和自动化更新的机器，注意包名是 <code>tw93/tap/kakuku</code>，不是 Homebrew 上旧的无关 <code>kaku</code> 包。</p>
           <h2 id="source"><a class="anchor" href="#source" aria-label="Link to 源码构建">#</a>源码构建</h2>
-          <p>源码构建主要面向 contributor。需要 Rust 工具链、macOS 构建环境和仓库里的 release/build 脚本。</p>
+          <p>源码构建主要面向 contributor，需要 Rust 工具链、macOS 构建环境和仓库里的 release/build 脚本。</p>
           <pre><code class="language-bash">git clone https://github.com/tw93/Kaku.git
 cd Kaku
 make app</code></pre>
           <h2 id="after-install"><a class="anchor" href="#after-install" aria-label="Link to 安装后">#</a>安装后</h2>
-          <p>安装完成后先打开一次 Kaku，再运行 <code>kaku doctor</code>。它会检查 app bundle、配置目录、PATH、zsh/fish shell 集成和可选工具。</p>
+          <p>安装完成后先打开一次 Kaku，再运行 <code>kaku doctor</code>，会检查 app bundle、配置目录、PATH、zsh/fish shell 集成和可选工具。</p>
           <pre><code class="language-bash">/Applications/Kaku.app/Contents/MacOS/kaku doctor</code></pre>
           <p>如果 shell 里找不到 <code>kaku</code>，用应用内置二进制恢复 shell 集成，然后重开登录 shell：</p>
           <pre><code class="language-bash">/Applications/Kaku.app/Contents/MacOS/kaku init --update-only
