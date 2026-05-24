@@ -23,7 +23,7 @@ Buttons are simple 8px-radius rectangles, at least 42px tall, with dark primary 
 
 ## Layout
 
-The landing page is product-first: Kaku appears as the first viewport signal, followed by the real screenshot, proof points, workflow sections, and final download CTA. Inner content widths stay close to the blog: 760px for prose and about 960px for page sections.
+The landing page is product-first: Kaku appears as the first viewport signal, followed by the real screenshot, proof points, workflow sections, and final download CTA. Inner content widths stay close to the blog: 760px for prose and about 960px for page sections. Keep the top navigation minimal: docs, GitHub, and language only. Install details live in docs, while Roadmap and Changelog stay in the footer and docs index.
 
 ## Verification
 

@@ -942,8 +942,12 @@ details p {
   }
 }
 @media (max-width: 820px) {
-  .nav-links { display: none; }
   .nav-inner { gap: 16px; }
+  .nav-links {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 14px;
+  }
   .nav-actions { margin-left: auto; }
   .section-head, .terminal-demo, .split, .docs-layout, .roadmap-stage, .release-card, .footer-brand {
     grid-template-columns: 1fr;
