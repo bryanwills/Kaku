@@ -81,8 +81,8 @@ button, input { font: inherit; }
 .skip-link:focus { transform: translateY(0); }
 
 .container { max-width: 760px; margin: 0 auto; padding: 0 24px; }
-.wide { max-width: 960px; margin: 0 auto; padding: 0 24px; }
-.hero-wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+.wide { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+.hero-wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
 .section { padding: 56px 0; border-bottom: 1px solid var(--line-soft); }
 .section-tight { padding: 46px 0; border-bottom: 1px solid var(--line-soft); }
 .label {
@@ -135,6 +135,7 @@ button, input { font: inherit; }
   color: var(--brand);
   margin-bottom: 6px;
 }
+.section-body { max-width: 760px; }
 .btn {
   min-height: 44px;
   display: inline-flex;
@@ -178,9 +179,9 @@ button, input { font: inherit; }
   display: flex;
   align-items: center;
   gap: 16px;
-  max-width: 960px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 28px;
   font-family: var(--ui);
   font-size: 12px;
   font-weight: 500;
@@ -894,7 +895,7 @@ button, input { font: inherit; }
   font-size: 15px;
   line-height: 1.6;
 }
-.faq { max-width: 760px; margin: 0 auto; padding: 0; }
+.faq { max-width: 760px; margin: 0; padding: 0; }
 .faq dt {
   margin: 28px 0 8px;
   color: var(--brand);
