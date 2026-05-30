@@ -21,6 +21,10 @@ use super::prompt_context::{
 use super::types::*;
 use super::{strings, syntax, waza};
 
+/// Placeholder line shown while a `/suggest` request is in flight. `drain_suggest`
+/// replaces this exact line in place once the result arrives.
+const SUGGEST_PENDING_TEXT: &str = "Thinking about a follow-up suggestion...";
+
 // ─── Input snapshot helpers ───────────────────────────────────────────────────
 
 /// Push `(input, cursor)` onto `stack` iff the input is non-empty. When the
@@ -593,6 +597,9 @@ pub(crate) struct App {
     pub(crate) model_fetch: ModelFetch,
     /// Receives the result of the background model fetch (one message only).
     pub(crate) model_fetch_rx: Option<Receiver<Result<Vec<String>, String>>>,
+    /// Receives the result of a background `/suggest` generation. Set while the
+    /// follow-up suggestion is in flight; drained once per frame.
+    pub(crate) suggest_rx: Option<Receiver<Result<String, String>>>,
     /// Temporary status shown in the top bar (clears after 1.5 s).
     pub(crate) model_status_flash: Option<(String, Instant)>,
     pub(crate) token_rx: Option<Receiver<StreamMsg>>,
@@ -794,6 +801,7 @@ impl App {
             model_index,
             model_fetch,
             model_fetch_rx,
+            suggest_rx: None,
             model_status_flash: None,
             token_rx: None,
             grapheme_queue: VecDeque::new(),
@@ -1842,26 +1850,69 @@ impl App {
     }
 
     /// Predict the next message the user might type, based on the recent
-    /// transcript. Synchronous: blocks the input thread for a short LLM
-    /// round-trip. Cheap because it runs against `fast_model`.
+    /// transcript. Runs the LLM round-trip on a background thread so the input
+    /// loop stays responsive even if the provider stalls; the result is drained
+    /// by `drain_suggest`. Cheap because it runs against `fast_model`.
     pub(crate) fn cmd_suggest(&mut self) {
         let msgs = self.collect_persisted_messages();
         if msgs.len() < 2 {
             self.push_info("Not enough conversation yet to suggest a follow-up.");
             return;
         }
-        match crate::ai_chat_engine::suggestion::generate_suggestion(&self.client, &msgs) {
-            Ok(s) if !s.trim().is_empty() => {
-                self.push_info(&format!("Suggested next message: {}", s));
-            }
-            Ok(_) => {
-                self.push_info("No clear next step to suggest.");
-            }
-            Err(e) => {
-                log::warn!("cmd_suggest: {e}");
-                self.push_info("Could not generate a suggestion right now.");
-            }
+        if self.suggest_rx.is_some() {
+            self.push_info("Already working on a suggestion, hold on.");
+            return;
         }
+        self.push_info(SUGGEST_PENDING_TEXT);
+        let client = self.client.clone();
+        let (tx, rx) = mpsc::channel::<Result<String, String>>();
+        self.suggest_rx = Some(rx);
+        crate::thread_util::spawn_with_pool(move || {
+            let result = crate::ai_chat_engine::suggestion::generate_suggestion(&client, &msgs)
+                .map_err(|e| e.to_string());
+            let _ = tx.send(result);
+        });
+    }
+
+    /// Drain the background `/suggest` channel. Returns true if a redraw is
+    /// needed. Replaces the pending placeholder line in place so the transcript
+    /// shows a single suggestion line rather than placeholder + result.
+    pub(crate) fn drain_suggest(&mut self) -> bool {
+        let rx = match self.suggest_rx.take() {
+            Some(rx) => rx,
+            None => return false,
+        };
+        let text = match rx.try_recv() {
+            Ok(Ok(s)) if !s.trim().is_empty() => format!("Suggested next message: {}", s),
+            Ok(Ok(_)) => "No clear next step to suggest.".to_string(),
+            Ok(Err(e)) => {
+                log::warn!("cmd_suggest: {e}");
+                "Could not generate a suggestion right now.".to_string()
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                self.suggest_rx = Some(rx);
+                return false;
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                "Could not generate a suggestion right now.".to_string()
+            }
+        };
+        // Replace the placeholder wherever it sits, not just at the tail: the
+        // user may have produced new lines while the request was in flight, in
+        // which case the pending line is no longer last. Searching from the end
+        // targets the most recent (and only) outstanding placeholder.
+        if let Some(slot) = self
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|m| m.is_context && m.content == SUGGEST_PENDING_TEXT)
+        {
+            slot.content = text;
+            self.display_lines_dirty = true;
+            return true;
+        }
+        self.push_info(&text);
+        true
     }
 
     pub(crate) fn cmd_config(&mut self) {

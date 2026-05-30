@@ -133,6 +133,11 @@ pub fn ai_chat_overlay(
             needs_redraw = true;
         }
 
+        // Drain background /suggest result.
+        if app.drain_suggest() {
+            needs_redraw = true;
+        }
+
         // Expire model status flash after 1.5 s.
         if app
             .model_status_flash
@@ -155,6 +160,7 @@ pub fn ai_chat_overlay(
             || !app.grapheme_queue.is_empty()
             || app.stream_pending_done
             || app.model_status_flash.is_some()
+            || app.suggest_rx.is_some()
             || matches!(app.model_fetch, ModelFetch::Loading)
         {
             Some(Duration::from_millis(30))
