@@ -576,6 +576,10 @@ thread_local! {
     // Sync drag flag: set by request_drag_move(), checked by mouse_down to execute performWindowDragWithEvent:
     static PENDING_DRAG_MOVE: Cell<bool> = Cell::new(false);
     static PENDING_DRAG_MOVE_FROM_MAXIMIZED: Cell<bool> = Cell::new(false);
+    // Set by mouse_down when a maximized/zoomed window wants a native drag, then
+    // consumed by the first mouseDragged: so a bare single click never reaches
+    // performWindowDragWithEvent: (which macOS would treat as a snap/maximize). #414
+    static ARMED_MAXIMIZED_NATIVE_DRAG: Cell<bool> = Cell::new(false);
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -677,6 +681,47 @@ fn should_perform_requested_window_drag(
 ) -> bool {
     should_perform_native_window_drag(in_fullscreen, is_zoomed, fills_visible_frame)
         || (!in_fullscreen && from_maximized && is_zoomed)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RequestedDragAction {
+    /// Do not start a native window drag for this press.
+    None,
+    /// Arm a native drag and start it only once the pointer actually moves.
+    DeferUntilDrag,
+    /// Start the native drag synchronously from the mouse-down event.
+    PerformNow,
+}
+
+/// Decide how a title-area press that requested a native window drag should be
+/// handled.
+///
+/// A maximized/zoomed window looks identical on a plain single click and on the
+/// start of a drag, so firing `performWindowDragWithEvent:` directly from
+/// mouse_down lets macOS interpret a bare title-area click as a snap/maximize
+/// gesture (#414). For that case we defer: arm the drag and only begin it when a
+/// `mouseDragged:` arrives, so a click is a no-op while a real drag still pulls
+/// the window off the top (#428). Non-maximized native drags keep firing
+/// immediately, matching the prior behavior.
+fn requested_window_drag_action(
+    in_fullscreen: bool,
+    is_zoomed: bool,
+    fills_visible_frame: bool,
+    from_maximized: bool,
+) -> RequestedDragAction {
+    if !should_perform_requested_window_drag(
+        in_fullscreen,
+        is_zoomed,
+        fills_visible_frame,
+        from_maximized,
+    ) {
+        return RequestedDragAction::None;
+    }
+    if from_maximized {
+        RequestedDragAction::DeferUntilDrag
+    } else {
+        RequestedDragAction::PerformNow
+    }
 }
 
 fn nsrect_approx_eq(a: NSRect, b: NSRect, tolerance: f64) -> bool {
@@ -3574,6 +3619,41 @@ mod tests {
     }
 
     #[test]
+    fn maximized_native_drag_is_deferred_until_pointer_moves() {
+        // A zoomed window that fills the frame requested the drag because it is
+        // maximized: defer so a bare single click cannot snap/maximize it (#414),
+        // while a real drag still pulls it off the top (#428).
+        assert_eq!(
+            requested_window_drag_action(false, true, true, true),
+            RequestedDragAction::DeferUntilDrag
+        );
+    }
+
+    #[test]
+    fn non_maximized_native_drag_fires_immediately() {
+        // An ordinary (un-zoomed, not-filling) window keeps the prior synchronous
+        // behavior: the press itself starts the native drag.
+        assert_eq!(
+            requested_window_drag_action(false, false, false, false),
+            RequestedDragAction::PerformNow
+        );
+    }
+
+    #[test]
+    fn no_native_drag_in_fullscreen_or_when_not_requested() {
+        assert_eq!(
+            requested_window_drag_action(true, true, true, true),
+            RequestedDragAction::None
+        );
+        // from_maximized set but the window is not actually zoomed and fills the
+        // frame: nothing to drag, so no native drag is started.
+        assert_eq!(
+            requested_window_drag_action(false, false, true, true),
+            RequestedDragAction::None
+        );
+    }
+
+    #[test]
     fn oversized_window_frame_is_fit_to_visible_frame() {
         let frame = NSRect::new(NSPoint::new(100.0, 100.0), NSSize::new(1920.0, 1080.0));
         let visible = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1440.0, 900.0));
@@ -4330,6 +4410,10 @@ impl WindowView {
     }
 
     extern "C" fn mouse_up(this: &mut Object, _sel: Sel, nsevent: id) {
+        // A press that armed a maximized-window native drag (see mouse_down) but
+        // released without moving is a plain click: disarm so it stays a no-op
+        // instead of leaking into the next drag. #414
+        ARMED_MAXIMIZED_NATIVE_DRAG.with(|flag| flag.set(false));
         Self::mouse_common(this, nsevent, MouseEventKind::Release(MousePress::Left));
     }
 
@@ -4351,13 +4435,16 @@ impl WindowView {
         // Clear stale flag to prevent false drag triggers from last abnormal exit
         PENDING_DRAG_MOVE.with(|flag| flag.set(false));
         PENDING_DRAG_MOVE_FROM_MAXIMIZED.with(|flag| flag.set(false));
+        ARMED_MAXIMIZED_NATIVE_DRAG.with(|flag| flag.set(false));
         Self::mouse_common(this, nsevent, MouseEventKind::Press(MousePress::Left));
 
-        // Execute drag synchronously: app layer may call request_drag_move() in mouse_common to set flag
-        // But skip if in fullscreen mode or if the window is zoomed/maximized. On macOS,
-        // performWindowDragWithEvent: can be interpreted as a snap/maximize gesture when the
-        // frame already fills the visible screen even if isZoomed is stale. Use double-click
-        // to un-zoom instead of letting a single title-area click expand the window.
+        // App layer may call request_drag_move() in mouse_common to set the flag.
+        // Skip in fullscreen. For a non-maximized window we start the native drag
+        // synchronously here. For a maximized/zoomed window a bare single click and
+        // the start of a drag look identical, and performWindowDragWithEvent: can be
+        // interpreted as a snap/maximize gesture (#414); arm it instead and start the
+        // native drag from the first mouseDragged: so a plain click is a no-op while a
+        // real drag still pulls the maximized window off the top (#428).
         let pending_drag = PENDING_DRAG_MOVE.with(|flag| flag.replace(false));
         let pending_drag_from_maximized =
             PENDING_DRAG_MOVE_FROM_MAXIMIZED.with(|flag| flag.replace(false));
@@ -4367,13 +4454,19 @@ impl WindowView {
                 if window != nil {
                     let is_zoomed: bool = msg_send![window, isZoomed];
                     let fills_visible_frame = window_fills_visible_frame(window);
-                    if should_perform_requested_window_drag(
+                    match requested_window_drag_action(
                         in_fullscreen,
                         is_zoomed,
                         fills_visible_frame,
                         pending_drag_from_maximized,
                     ) {
-                        let () = msg_send![window, performWindowDragWithEvent: nsevent];
+                        RequestedDragAction::PerformNow => {
+                            let () = msg_send![window, performWindowDragWithEvent: nsevent];
+                        }
+                        RequestedDragAction::DeferUntilDrag => {
+                            ARMED_MAXIMIZED_NATIVE_DRAG.with(|flag| flag.set(true));
+                        }
+                        RequestedDragAction::None => {}
                     }
                 }
             }
@@ -4511,6 +4604,24 @@ impl WindowView {
     }
 
     extern "C" fn mouse_moved_or_dragged(this: &mut Object, _sel: Sel, nsevent: id) {
+        // If mouse_down armed a maximized-window native drag, the pointer has now
+        // actually moved, so this is a genuine drag rather than a click: hand off to
+        // performWindowDragWithEvent: to pull the window off the top (#428). Deferring
+        // to real movement is what keeps a bare single click from snapping/maximizing
+        // the window (#414). Only mouseDragged: (button held) should consume the arm;
+        // a plain mouseMoved: must not.
+        if _sel == sel!(mouseDragged:) {
+            let armed = ARMED_MAXIMIZED_NATIVE_DRAG.with(|flag| flag.replace(false));
+            if armed {
+                unsafe {
+                    let window: id = msg_send![this as id, window];
+                    if window != nil {
+                        let () = msg_send![window, performWindowDragWithEvent: nsevent];
+                    }
+                }
+                return;
+            }
+        }
         Self::mouse_common(this, nsevent, MouseEventKind::Move);
     }
 
