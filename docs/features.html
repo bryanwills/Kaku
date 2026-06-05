@@ -27,7 +27,12 @@
         <article class="doc-content">
           <h2 id="features-kaku-assistant"><a class="anchor" href="#features-kaku-assistant" aria-label="Link to Kaku Assistant">#</a>Kaku Assistant</h2><p>Kaku Assistant has two modes: automatic error recovery and on-demand command generation from natural language.</p>
           <p><strong>Setup</strong></p>
-          <p>Run <code>kaku ai</code> to open the AI settings panel. Enable Kaku Assistant, pick a provider, and enter your API key.</p>
+          <p>Run <code>kaku ai</code> to open the AI settings panel. Enable Kaku Assistant, then choose the provider path that matches how you already work:</p>
+          <ol>
+            <li>Use <strong>Codex</strong> to reuse your existing <code>codex</code> / ChatGPT login without a separate API key.</li>
+            <li>Use <strong>OpenAI</strong> when you want to bring an API key directly.</li>
+            <li>Use <strong>Custom</strong> for OpenAI-compatible gateways, local proxies, or enterprise endpoints.</li>
+          </ol>
           <table>
           <thead>
           <tr>
@@ -52,8 +57,7 @@
           <td align="left">(free text)</td>
           </tr>
           </tbody></table>
-          <p>Selecting a provider auto-fills the base URL and populates the model dropdown.</p>
-          <p>To reuse your existing <code>codex</code> (ChatGPT) login instead of an API key, set <strong>Auth Type</strong> to <code>codex</code> and pick a Codex model such as <code>gpt-5-codex</code>.</p>
+          <p>Selecting a provider auto-fills the base URL and populates the model dropdown. For Codex, set <strong>Auth Type</strong> to <code>codex</code> and pick a Codex model such as <code>gpt-5-codex</code>.</p>
           <h2 id="features-ai-chat-panel"><a class="anchor" href="#features-ai-chat-panel" aria-label="Link to AI Chat Panel">#</a>AI Chat Panel</h2><p>Press <code>Cmd + L</code> to open the built-in AI chat panel. It streams Markdown answers,
           highlights code blocks, can include terminal context, and can use approved tools
           for project files, shell commands, web search, and memory. Press <code>Shift + Tab</code>

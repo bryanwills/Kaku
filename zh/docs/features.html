@@ -27,7 +27,12 @@
         <article class="doc-content">
           <h2 id="features-kaku-assistant"><a class="anchor" href="#features-kaku-assistant" aria-label="链接到「Kaku Assistant」">#</a>Kaku Assistant</h2><p>Kaku Assistant 有两个模式：命令失败时自动修复，以及按需把一句人话生成命令。</p>
           <p><strong>配置</strong></p>
-          <p>运行 <code>kaku ai</code> 打开 AI 设置面板，开启 Kaku Assistant，选一个 Provider，填上 API key。</p>
+          <p>运行 <code>kaku ai</code> 打开 AI 设置面板，开启 Kaku Assistant，再按你现在的使用方式选择 Provider：</p>
+          <ol>
+            <li>选 <strong>Codex</strong> 可以复用已有的 <code>codex</code> / ChatGPT 登录，不需要单独填 API key。</li>
+            <li>选 <strong>OpenAI</strong> 时直接填 API key。</li>
+            <li>选 <strong>Custom</strong> 时填写 OpenAI 兼容网关、本地代理或企业接口。</li>
+          </ol>
           <table>
           <thead>
           <tr>
@@ -52,8 +57,7 @@
           <td align="left">（自由填写）</td>
           </tr>
           </tbody></table>
-          <p>选好 Provider 后会自动填好 base URL，并把可用模型填进下拉框。</p>
-          <p>想用已有的 <code>codex</code>（ChatGPT）登录、不填 API key 的话，把 <strong>Auth Type</strong> 设为 <code>codex</code>，再选一个 Codex 模型。</p>
+          <p>选好 Provider 后会自动填好 base URL，并把可用模型填进下拉框。使用 Codex 时，把 <strong>Auth Type</strong> 设为 <code>codex</code>，再选一个 Codex 模型。</p>
           <h2 id="features-ai-chat-panel"><a class="anchor" href="#features-ai-chat-panel" aria-label="链接到「AI Chat 面板」">#</a>AI Chat 面板</h2><p>按 <code>Cmd + L</code> 打开内置的 AI Chat 面板。它会流式输出 Markdown 答案，
           高亮代码块，可以带上终端上下文，也可以在你授权后调用工具，
           访问项目文件、shell 命令、网页搜索和记忆。当 Simple Model 和 Deep Model

@@ -41,6 +41,7 @@ make install-tools
 
 # Install pre-commit hook (format + test before each commit)
 make install-hooks</code></pre>
+                    <p>After setup, <code>make app</code> builds a local debug app bundle at <code>dist/Kaku.app</code>. Use it for development and verification; normal users should install from the DMG or Homebrew.</p>
                     <h2 id="contributing-development"><a class="anchor" href="#contributing-development" aria-label="Link to Development">#</a>Development</h2>
                     <p>Make targets cover formatting, type checks, tests, and local runs.</p>
                     <table>
@@ -52,7 +53,7 @@ make install-hooks</code></pre>
                         <tr><td><code>make test</code></td><td>Run unit tests</td></tr>
                         <tr><td><code>make dev</code></td><td>Fast local debug: build <code>kaku-gui</code> and run from <code>target/debug</code></td></tr>
                         <tr><td><code>make build</code></td><td>Compile binaries (no app bundle)</td></tr>
-                        <tr><td><code>make app</code></td><td>Build debug app bundle to <code>dist/Kaku.app</code></td></tr>
+                        <tr><td><code>make app</code></td><td>Build a debug app bundle to <code>dist/Kaku.app</code> for local testing</td></tr>
                       </tbody>
                     </table>
                     <p>Recommended workflow:</p>

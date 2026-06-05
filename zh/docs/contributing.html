@@ -41,6 +41,7 @@ make install-tools
 
 # 装 pre-commit hook：每次提交前会跑 format + test
 make install-hooks</code></pre>
+                    <p>环境准备好后，<code>make app</code> 会把本地 debug app bundle 编译到 <code>dist/Kaku.app</code>。它用于开发和验证，不是普通用户的安装方式。</p>
                     <h2 id="contributing-development"><a class="anchor" href="#contributing-development" aria-label="链接到「日常开发」">#</a>日常开发</h2>
                     <p>常用 Make 目标如下，覆盖格式化、类型检查、测试和本地运行。</p>
                     <table>
@@ -52,7 +53,7 @@ make install-hooks</code></pre>
                         <tr><td><code>make test</code></td><td>跑单元测试</td></tr>
                         <tr><td><code>make dev</code></td><td>本地快速 debug 运行，从 <code>target/debug</code> 启动 <code>kaku-gui</code></td></tr>
                         <tr><td><code>make build</code></td><td>编译二进制，不打 app bundle</td></tr>
-                        <tr><td><code>make app</code></td><td>编译 debug app bundle 到 <code>dist/Kaku.app</code></td></tr>
+                        <tr><td><code>make app</code></td><td>编译本地测试用的 debug app bundle 到 <code>dist/Kaku.app</code></td></tr>
                       </tbody>
                     </table>
                     <p>推荐的开发循环：</p>

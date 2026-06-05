@@ -40,7 +40,7 @@ kaku chat &quot;explain this&quot;  # one-shot prompt
           <h2 id="cli-kaku-config"><a class="anchor" href="#cli-kaku-config" aria-label="Link to kaku config">#</a>kaku config</h2><p>Open the Kaku configuration file (<code>~/.config/kaku/kaku.lua</code>) in your default editor. Also accessible from the settings panel with <code>Cmd + ,</code>.</p>
           <pre><code class="language-bash">kaku config
 </code></pre>
-          <h2 id="cli-kaku-doctor"><a class="anchor" href="#cli-kaku-doctor" aria-label="Link to kaku doctor">#</a>kaku doctor</h2><p>Run diagnostics and verify that Kaku&#39;s shell integration, PATH entries, and optional tool installations are healthy. Use this first if something feels broken.</p>
+          <h2 id="cli-kaku-doctor"><a class="anchor" href="#cli-kaku-doctor" aria-label="Link to kaku doctor">#</a>kaku doctor</h2><p>Run diagnostics and verify that Kaku&#39;s app bundle, shell integration, PATH entries, and optional tools are healthy. Use this first after installation or when something feels broken.</p>
           <pre><code class="language-bash">kaku doctor
 </code></pre>
           <h2 id="cli-kaku-update"><a class="anchor" href="#cli-kaku-update" aria-label="Link to kaku update">#</a>kaku update</h2><p>Check for and install the latest Kaku release.</p>
@@ -49,10 +49,10 @@ kaku chat &quot;explain this&quot;  # one-shot prompt
           <h2 id="cli-kaku-reset"><a class="anchor" href="#cli-kaku-reset" aria-label="Link to kaku reset">#</a>kaku reset</h2><p>Reset Kaku&#39;s config and state files to defaults. Use with caution, this overwrites <code>~/.config/kaku/kaku.lua</code>.</p>
           <pre><code class="language-bash">kaku reset
 </code></pre>
-          <h2 id="cli-kaku-init"><a class="anchor" href="#cli-kaku-init" aria-label="Link to kaku init">#</a>kaku init</h2><p>Set up Kaku&#39;s shell integration for zsh and/or fish. Creates <code>~/.config/kaku/zsh/kaku.zsh</code> and optionally <code>~/.config/kaku/fish/kaku.fish</code>. Also installs optional CLI tools (Starship, Delta, Lazygit, Yazi) via Homebrew.</p>
+          <h2 id="cli-kaku-init"><a class="anchor" href="#cli-kaku-init" aria-label="Link to kaku init">#</a>kaku init</h2><p>Set up or refresh Kaku&#39;s shell integration for zsh and/or fish. Creates <code>~/.config/kaku/zsh/kaku.zsh</code> and optionally <code>~/.config/kaku/fish/kaku.fish</code>. In an interactive shell, it asks before installing missing optional CLI tools such as Starship, Delta, Lazygit, and Yazi via Homebrew.</p>
           <pre><code class="language-bash">kaku init
 </code></pre>
-          <p>If the <code>kaku</code> command goes missing from your shell, restore it with:</p>
+          <p>If the <code>kaku</code> command goes missing from your shell, refresh integration without optional tool prompts:</p>
           <pre><code class="language-bash">/Applications/Kaku.app/Contents/MacOS/kaku init --update-only
 exec zsh -l
 </code></pre>

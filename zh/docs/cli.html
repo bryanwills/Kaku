@@ -40,7 +40,7 @@ kaku chat &quot;explain this&quot;  # one-shot prompt
           <h2 id="cli-kaku-config"><a class="anchor" href="#cli-kaku-config" aria-label="链接到「kaku config」">#</a>kaku config</h2><p>用默认编辑器打开 Kaku 配置文件（<code>~/.config/kaku/kaku.lua</code>）。也可以在设置面板里用 <code>Cmd + ,</code> 打开。</p>
           <pre><code class="language-bash">kaku config
 </code></pre>
-          <h2 id="cli-kaku-doctor"><a class="anchor" href="#cli-kaku-doctor" aria-label="链接到「kaku doctor」">#</a>kaku doctor</h2><p>跑一遍诊断，确认 Kaku 的 shell 集成、PATH 条目和可选工具安装都正常。感觉哪里坏了先跑它。</p>
+          <h2 id="cli-kaku-doctor"><a class="anchor" href="#cli-kaku-doctor" aria-label="链接到「kaku doctor」">#</a>kaku doctor</h2><p>跑一遍诊断，确认 Kaku 的 app bundle、shell 集成、PATH 条目和可选工具都正常。安装后或感觉哪里坏了，先跑它。</p>
           <pre><code class="language-bash">kaku doctor
 </code></pre>
           <h2 id="cli-kaku-update"><a class="anchor" href="#cli-kaku-update" aria-label="链接到「kaku update」">#</a>kaku update</h2><p>检查并安装最新的 Kaku 版本。</p>
@@ -49,10 +49,10 @@ kaku chat &quot;explain this&quot;  # one-shot prompt
           <h2 id="cli-kaku-reset"><a class="anchor" href="#cli-kaku-reset" aria-label="链接到「kaku reset」">#</a>kaku reset</h2><p>把 Kaku 的配置和状态文件重置为默认值。谨慎使用，它会覆盖 <code>~/.config/kaku/kaku.lua</code>。</p>
           <pre><code class="language-bash">kaku reset
 </code></pre>
-          <h2 id="cli-kaku-init"><a class="anchor" href="#cli-kaku-init" aria-label="链接到「kaku init」">#</a>kaku init</h2><p>为 zsh 和/或 fish 配置 Kaku 的 shell 集成。会创建 <code>~/.config/kaku/zsh/kaku.zsh</code>，并可选创建 <code>~/.config/kaku/fish/kaku.fish</code>。也会通过 Homebrew 安装可选 CLI 工具（Starship、Delta、Lazygit、Yazi）。</p>
+          <h2 id="cli-kaku-init"><a class="anchor" href="#cli-kaku-init" aria-label="链接到「kaku init」">#</a>kaku init</h2><p>为 zsh 和/或 fish 配置或刷新 Kaku 的 shell 集成。会创建 <code>~/.config/kaku/zsh/kaku.zsh</code>，并可选创建 <code>~/.config/kaku/fish/kaku.fish</code>。在交互式 shell 里，它会询问是否通过 Homebrew 安装缺失的 Starship、Delta、Lazygit、Yazi 等可选 CLI 工具。</p>
           <pre><code class="language-bash">kaku init
 </code></pre>
-          <p>如果 <code>kaku</code> 命令从 shell 里消失了，用这个恢复：</p>
+          <p>如果 <code>kaku</code> 命令从 shell 里消失了，用这个刷新集成，不触发可选工具安装提示：</p>
           <pre><code class="language-bash">/Applications/Kaku.app/Contents/MacOS/kaku init --update-only
 exec zsh -l
 </code></pre>

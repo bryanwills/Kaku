@@ -25,6 +25,16 @@
           <div class="section-toc"><p>本页目录</p><a class="depth-2" href="#configuration-config-file">配置文件</a><a class="depth-2" href="#configuration-appearance">外观</a><a class="depth-2" href="#configuration-terminal-behavior">终端行为</a><a class="depth-2" href="#configuration-custom-keybindings">自定义快捷键</a><a class="depth-2" href="#configuration-advanced">高级</a></div>
         </aside>
         <article class="doc-content">
+          <div class="quick-grid">
+            <div class="quick-card">
+              <h3>打开配置</h3>
+              <p>用 <code>kaku config</code> 或 <code>Cmd + ,</code>。Kaku 会先加载默认值，再应用你的覆盖。</p>
+            </div>
+            <div class="quick-card">
+              <h3>最常改的几项</h3>
+              <p>先看 <code>font_size</code>、<code>window_background_opacity</code>、<code>copy_on_select</code> 和 <code>smart_tab_mode</code>。</p>
+            </div>
+          </div>
           <h2 id="configuration-config-file"><a class="anchor" href="#configuration-config-file" aria-label="链接到「配置文件」">#</a>配置文件</h2><p>首次启动时，Kaku 会自动创建带注释模板的 <code>~/.config/kaku/kaku.lua</code>。用 <code>kaku config</code> 或 <code>Cmd + ,</code> 打开它。</p>
           <p>这个文件先加载 Kaku 内置的默认值，再把你的自定义覆盖叠在上面：</p>
           <pre><code class="language-lua">local wezterm = require &#39;wezterm&#39;
