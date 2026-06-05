@@ -53,7 +53,7 @@
           </tr>
           </tbody></table>
           <p>选好 Provider 后会自动填好 base URL，并把可用模型填进下拉框。</p>
-          <p>想用已有的 <code>codex</code>（ChatGPT）登录、不填 API key 的话，把 <strong>Auth Type</strong> 设为 <code>codex</code>，并选一个 Codex 模型（例如 <code>gpt-5-codex</code>）。</p>
+          <p>想用已有的 <code>codex</code>（ChatGPT）登录、不填 API key 的话，把 <strong>Auth Type</strong> 设为 <code>codex</code>，再选一个 Codex 模型。</p>
           <h2 id="features-ai-chat-panel"><a class="anchor" href="#features-ai-chat-panel" aria-label="链接到「AI Chat 面板」">#</a>AI Chat 面板</h2><p>按 <code>Cmd + L</code> 打开内置的 AI Chat 面板。它会流式输出 Markdown 答案，
           高亮代码块，可以带上终端上下文，也可以在你授权后调用工具，
           访问项目文件、shell 命令、网页搜索和记忆。当 Simple Model 和 Deep Model
@@ -63,7 +63,7 @@
           <pre><code class="language-bash">k &quot;summarize the current project&quot;
 kaku chat
 </code></pre>
-          <p>独立 CLI 故意做得比 overlay 简单：它只输出纯终端文本，支持
+          <p>独立 CLI 比 overlay 更简单，只输出纯终端文本，支持
           <code>/new</code>、<code>/resume</code>、<code>/clear</code>、<code>/status</code>、<code>/memory</code> 和 <code>/exit</code>。</p>
           <p><strong>命令失败修复</strong></p>
           <p>当一条命令以非零状态退出时，Kaku Assistant 会自动把失败的命令、退出码、工作目录和 git 分支发给 LLM，并在行内给出建议的修复方案。按 <code>Cmd + Shift + E</code> 把建议粘进终端。危险命令（比如 <code>rm -rf</code>、<code>git reset --hard</code>）只粘贴、永不自动执行。</p>
@@ -160,7 +160,7 @@ end tell
           <p>当一个 git 仓库有未提交改动、且还没在这个目录用过 lazygit 时，Kaku 会显示一次性提示，提醒你可以用它。</p>
           <p>用 <code>brew install lazygit</code> 或 <code>kaku init</code> 安装 lazygit。</p>
           <h2 id="features-yazi-file-manager"><a class="anchor" href="#features-yazi-file-manager" aria-label="链接到「Yazi 文件管理器」">#</a>Yazi 文件管理器</h2><p>按 <code>Cmd + Shift + Y</code> 在当前分屏里启动 yazi。shell 包装 <code>y</code> 同样会启动 yazi，并在退出时同步 shell 的当前工作目录。</p>
-          <p><strong>主题同步</strong>：Kaku 会自动更新 <code>~/.config/yazi/theme.toml</code>，匹配当前色彩方案（Kaku Dark 或 Kaku Light）。无需手动配置 yazi 主题。</p>
+          <p><strong>主题同步</strong>：Kaku 会自动更新 <code>~/.config/yazi/theme.toml</code>，匹配当前色彩方案，无需手动配置。</p>
           <p>用 <code>brew install yazi</code> 或 <code>kaku init</code> 安装 yazi。</p>
           <h2 id="features-remote-files"><a class="anchor" href="#features-remote-files" aria-label="链接到「远端文件」">#</a>远端文件</h2><p>按 <code>Cmd + Shift + R</code> 通过 <code>sshfs</code> 把当前 SSH 会话的远端文件系统挂到本地，并用 yazi 打开。</p>
           <p>Kaku 会从当前活动分屏自动识别 SSH 目标。挂载点在 <code>~/Library/Caches/dev.kaku/sshfs/&lt;host&gt;</code>。</p>
@@ -174,7 +174,7 @@ end tell
           <li><strong>zsh-autosuggestions</strong>：fish 风格的历史补全，边打字边提示。</li>
           </ul>
           <p><strong>Fish 支持</strong></p>
-          <p>fish 用户运行 <code>kaku init</code> 即可生成 <code>~/.config/kaku/fish/kaku.fish</code>。<code>kaku doctor</code> 会同时检查 zsh 和 fish 的集成路径。</p>
+          <p>fish 用户运行 <code>kaku init</code> 即可生成 <code>~/.config/kaku/fish/kaku.fish</code>。<code>kaku doctor</code> 会检查 zsh 和 fish 集成。</p>
           <p><strong>可选工具（通过 <code>kaku init</code> 安装）</strong></p>
           <ul>
           <li><strong>Starship</strong>：快速、可定制的提示符，带 git 和环境信息。</li>

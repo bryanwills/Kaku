@@ -69,7 +69,7 @@ kaku cli --help
           <h2 id="faq-how-do-i-scroll-inside-nano-vim-or-another-full-screen-terminal-app"><a class="anchor" href="#faq-how-do-i-scroll-inside-nano-vim-or-another-full-screen-terminal-app" aria-label="Link to How do I scroll inside nano, vim, or another full-screen terminal app?">#</a>How do I scroll inside nano, vim, or another full-screen terminal app?</h2><p>Enable alternate-screen wheel forwarding:</p>
           <pre><code class="language-lua">config.alternate_screen_wheel_scrolls_terminal = true
 </code></pre>
-          <h2 id="faq-how-do-i-change-the-font-my-font-change-isn-t-taking-effect"><a class="anchor" href="#faq-how-do-i-change-the-font-my-font-change-isn-t-taking-effect" aria-label="Link to How do I change the font? My font change isn&#39;t taking effect.">#</a>How do I change the font? My font change isn&#39;t taking effect.</h2><p>Font changes require explicitly setting <code>config.font</code> in your config:</p>
+          <h2 id="faq-how-do-i-change-the-font-my-font-change-isn-t-taking-effect"><a class="anchor" href="#faq-how-do-i-change-the-font-my-font-change-isn-t-taking-effect" aria-label="Link to How do I change the font? My font change isn&#39;t taking effect.">#</a>How do I change the font? My font change isn&#39;t taking effect.</h2><p>Font changes require explicitly setting <code>config.font</code>:</p>
           <pre><code class="language-lua">config.font = wezterm.font(&#39;Your Font Name&#39;)
 </code></pre>
           <p>Note: Kaku&#39;s theme-aware font weight system only applies to the default JetBrains Mono stack. Once you set a custom font, Kaku will no longer override its weight automatically.</p>
@@ -85,7 +85,7 @@ kaku cli --help
 </code></pre>
           <p>If you see checksum errors with <code>kaku update</code>, use <code>brew upgrade tw93/tap/kakuku</code> directly.</p>
           <h2 id="faq-claude-code-notifications-don-t-appear"><a class="anchor" href="#faq-claude-code-notifications-don-t-appear" aria-label="Link to Claude Code notifications don&#39;t appear.">#</a>Claude Code notifications don&#39;t appear.</h2><p>Kaku&#39;s notification permission may not be granted. Go to System Settings &gt; Notifications &gt; Kaku and enable Allow Notifications. Then restart Kaku.</p>
-          <h2 id="faq-the-global-hotkey-doesn-t-work-on-non-qwerty-keyboards-e-g-colemak"><a class="anchor" href="#faq-the-global-hotkey-doesn-t-work-on-non-qwerty-keyboards-e-g-colemak" aria-label="Link to The global hotkey doesn&#39;t work on non-QWERTY keyboards (e.g. Colemak).">#</a>The global hotkey doesn&#39;t work on non-QWERTY keyboards (e.g. Colemak).</h2><p><code>Cmd + Opt + Ctrl + K</code> uses the physical QWERTY K position. On Colemak, this corresponds to a different key. Remap it in your config:</p>
+          <h2 id="faq-the-global-hotkey-doesn-t-work-on-non-qwerty-keyboards-e-g-colemak"><a class="anchor" href="#faq-the-global-hotkey-doesn-t-work-on-non-qwerty-keyboards-e-g-colemak" aria-label="Link to The global hotkey doesn&#39;t work on non-QWERTY keyboards (e.g. Colemak).">#</a>The global hotkey doesn&#39;t work on non-QWERTY keyboards (e.g. Colemak).</h2><p><code>Cmd + Opt + Ctrl + K</code> uses the physical QWERTY K position. On Colemak, this corresponds to a different key. Remap it:</p>
           <pre><code class="language-lua">table.insert(config.keys, {
   key = &#39;k&#39;,  -- adjust to your layout&#39;s physical key
   mods = &#39;CMD|OPT|CTRL&#39;,

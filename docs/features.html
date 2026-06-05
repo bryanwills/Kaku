@@ -68,7 +68,7 @@ kaku chat
           terminal text and supports <code>/new</code>, <code>/resume</code>, <code>/clear</code>, <code>/status</code>, <code>/memory</code>,
           and <code>/exit</code>.</p>
           <p><strong>Error recovery</strong></p>
-          <p>When a command exits with a non-zero status, Kaku Assistant automatically sends the failed command, exit code, working directory, and git branch to the LLM and displays a suggested fix inline. Press <code>Cmd + Shift + E</code> to paste the suggestion into the terminal. Dangerous commands (e.g. <code>rm -rf</code>, <code>git reset --hard</code>) are pasted but never auto-executed.</p>
+          <p>When a command exits with a non-zero status, Kaku Assistant automatically sends the failed command, exit code, working directory, and git branch to the LLM and displays a suggested fix inline. Press <code>Cmd + Shift + E</code> to paste it back. Dangerous commands (e.g. <code>rm -rf</code>, <code>git reset --hard</code>) are pasted but never auto-executed.</p>
           <p>The assistant does not trigger on: <code>Ctrl+C</code> exits, help flags, bare package manager calls, git pull conflicts, or non-shell foreground processes.</p>
           <p><strong>Natural language to command</strong></p>
           <p>Type <code># &lt;description&gt;</code> at the prompt and press Enter to generate a shell command from plain English. Kaku intercepts the line before the shell sees it, sends your query along with the current directory and git branch to the LLM, and injects the resulting command back into the prompt ready to review and run.</p>
@@ -76,7 +76,7 @@ kaku chat
 # find and kill the process on port 3000
 # compress the src folder excluding node_modules
 </code></pre>
-          <p>The <code>#</code> prefix works in both zsh and fish. The original query stays visible while the request is in flight. If the model cannot produce a safe command, it injects a short explanation instead. Dangerous commands are loaded but flagged for review, never auto-executed.</p>
+          <p>The <code>#</code> prefix works in both zsh and fish. The original query stays visible while the request is in flight. If the model cannot produce a safe command, it explains instead. Dangerous commands are loaded but flagged for review, never auto-executed.</p>
           <p><strong>assistant.toml fields</strong></p>
           <p>The config lives at <code>~/.config/kaku/assistant.toml</code>:</p>
           <table>
@@ -167,11 +167,11 @@ end tell
           <p>Install yazi with <code>brew install yazi</code> or via <code>kaku init</code>.</p>
           <h2 id="features-remote-files"><a class="anchor" href="#features-remote-files" aria-label="Link to Remote Files">#</a>Remote Files</h2><p>Press <code>Cmd + Shift + R</code> to mount the current SSH session&#39;s remote filesystem locally via <code>sshfs</code> and open it in yazi.</p>
           <p>Kaku auto-detects the SSH target from the active pane. The mount lives at <code>~/Library/Caches/dev.kaku/sshfs/&lt;host&gt;</code>.</p>
-          <p>Requirements: <code>sshfs</code> installed (<code>brew install macfuse sshfs</code>) and passwordless SSH auth (key-based) for the remote host.</p>
+          <p>Requirements: <code>sshfs</code> installed (<code>brew install macfuse sshfs</code>) and key-based SSH auth to the remote host.</p>
           <h2 id="features-shell-suite"><a class="anchor" href="#features-shell-suite" aria-label="Link to Shell Suite">#</a>Shell Suite</h2><p>Kaku ships a curated set of shell plugins that load automatically inside Kaku sessions.</p>
           <p><strong>Zsh plugins (built-in)</strong></p>
           <ul>
-          <li><strong>zsh-z</strong>: Smarter <code>cd</code> that learns your most-used directories and reuses your existing <code>~/.z</code> history. Use <code>z &lt;dir&gt;</code>, <code>z -l &lt;dir&gt;</code> to list matches, <code>z -t</code> for recent directories. <code>cd</code> + Tab also falls back to this history when filesystem completion has no match.</li>
+          <li><strong>zsh-z</strong>: Smarter <code>cd</code> that learns your most-used directories and reuses your existing <code>~/.z</code> history. Use <code>z &lt;dir&gt;</code>, <code>z -l &lt;dir&gt;</code> to list matches, <code>z -t</code> for recent directories. <code>cd</code> + Tab also falls back to this history.</li>
           <li><strong>zsh-completions</strong>: Extended completions for common CLI tools.</li>
           <li><strong>fast-syntax-highlighting</strong>: Real-time command coloring and error highlighting, with richer colors and faster startup than zsh-syntax-highlighting.</li>
           <li><strong>zsh-autosuggestions</strong>: Fish-style history-based completions as you type.</li>
