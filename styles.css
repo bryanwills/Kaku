@@ -94,8 +94,8 @@ button, input { font: inherit; }
 .skip-link:focus { transform: translateY(0); }
 
 .container { max-width: 760px; margin: 0 auto; padding: 0 24px; }
-.wide { max-width: 1120px; margin: 0 auto; padding: 0 64px; }
-.hero-wrap { max-width: 1120px; margin: 0 auto; padding: 0 64px; }
+.wide { max-width: 1280px; margin: 0 auto; padding: 0 64px; }
+.hero-wrap { max-width: 1280px; margin: 0 auto; padding: 0 64px; }
 .section { padding: 0; margin-bottom: 96px; }
 .section-tight { padding: 0; margin-bottom: 72px; }
 .hero + .section { padding-top: 64px; }
@@ -190,7 +190,7 @@ button, input { font: inherit; }
   display: flex;
   align-items: center;
   gap: 0;
-  max-width: 1120px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 0 64px;
   font-family: var(--serif);
@@ -274,7 +274,7 @@ button, input { font: inherit; }
   text-align: left;
 }
 .hero-centered {
-  max-width: 1120px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 0 64px;
 }
@@ -342,7 +342,7 @@ button, input { font: inherit; }
 .terminal-demo {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
-  gap: 34px;
+  gap: 52px;
   align-items: start;
 }
 .terminal-body {
@@ -409,7 +409,7 @@ button, input { font: inherit; }
 .split {
   display: grid;
   grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
-  gap: 34px;
+  gap: 52px;
   align-items: center;
 }
 .command-card {
@@ -469,7 +469,7 @@ button, input { font: inherit; }
 .gallery {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 28px;
 }
 .shot {
   margin: 0;
