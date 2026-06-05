@@ -26,6 +26,7 @@ use promise::Future;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::rc::Rc;
 use thiserror::Error;
@@ -313,8 +314,26 @@ impl WindowEventSender {
                 return;
             };
 
-            log::trace!("{:?}", event);
-            (self.handler.borrow_mut())(event, &window);
+            let event_name = format!("{event:?}");
+            log::trace!("{event_name}");
+            // AppKit callbacks abort if a panic crosses extern "C"; keep the
+            // panic inside the Rust event boundary and leave dispatch usable.
+            if let Err(payload) = catch_unwind(AssertUnwindSafe(|| {
+                (self.handler.borrow_mut())(event, &window);
+            })) {
+                let message = if let Some(message) = payload.downcast_ref::<&'static str>() {
+                    *message
+                } else if let Some(message) = payload.downcast_ref::<String>() {
+                    message.as_str()
+                } else {
+                    "<non-string panic>"
+                };
+                log::error!("window event handler panicked while handling {event_name}: {message}");
+                let mut state = self.state.borrow_mut();
+                state.dispatching = false;
+                state.pending.clear();
+                return;
+            }
         }
     }
 }
@@ -517,5 +536,24 @@ mod tests {
         events.dispatch(WindowEvent::MouseLeave);
 
         assert_eq!(seen.borrow().as_slice(), ["MouseLeave", "NeedRepaint"]);
+    }
+
+    #[test]
+    fn window_event_sender_recovers_after_handler_panic() {
+        let calls = Rc::new(RefCell::new(0));
+        let calls_clone = Rc::clone(&calls);
+        let events = WindowEventSender::new(move |_event, _window| {
+            let mut calls = calls_clone.borrow_mut();
+            *calls += 1;
+            if *calls == 1 {
+                panic!("intentional test panic");
+            }
+        });
+        events.assign_window(Window::for_test(7));
+
+        events.dispatch(WindowEvent::NeedRepaint);
+        events.dispatch(WindowEvent::NeedRepaint);
+
+        assert_eq!(*calls.borrow(), 2);
     }
 }

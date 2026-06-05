@@ -9,6 +9,37 @@ use wezterm_cell::Cell;
 use wezterm_surface::change::ImageData;
 use wezterm_surface::TextureCoordinate;
 
+fn scale_to_fit(
+    width: usize,
+    height: usize,
+    max_width: usize,
+    max_height: usize,
+) -> (usize, usize) {
+    if width == 0 || height == 0 || max_width == 0 || max_height == 0 {
+        return (width.max(1), height.max(1));
+    }
+
+    if width <= max_width && height <= max_height {
+        return (width, height);
+    }
+
+    let scale = (max_width as f64 / width as f64).min(max_height as f64 / height as f64);
+    let scaled_width = ((width as f64) * scale).floor().max(1.0) as usize;
+    let scaled_height = ((height as f64) * scale).floor().max(1.0) as usize;
+
+    (scaled_width, scaled_height)
+}
+
+fn texture_delta_divisor(target_pixels: usize, image_pixels: u32, source_pixels: u32) -> u32 {
+    if source_pixels == 0 {
+        return image_pixels.max(1);
+    }
+
+    ((target_pixels as u64 * image_pixels as u64) / source_pixels as u64)
+        .max(1)
+        .min(u32::MAX as u64) as u32
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlacementInfo {
     pub first_row: StableRowIndex,
@@ -89,20 +120,39 @@ impl TerminalState {
             .unwrap_or(image_max_height)
             .min(image_max_height);
 
+        let cursor_x = self.cursor.x;
+        let cursor_y = self.cursor.y.max(0) as usize;
+        let mut target_draw_width = draw_width as usize;
+        let mut target_draw_height = draw_height as usize;
+        if params.columns.is_none() && params.rows.is_none() {
+            let available_cols = physical_cols.saturating_sub(cursor_x).max(1);
+            let available_rows = if params.do_not_move_cursor {
+                physical_rows.saturating_sub(cursor_y).max(1)
+            } else {
+                physical_rows
+            };
+            (target_draw_width, target_draw_height) = scale_to_fit(
+                target_draw_width,
+                target_draw_height,
+                available_cols * cell_pixel_width,
+                available_rows * cell_pixel_height,
+            );
+        }
+
         let (fullcells_width, remainder_width_cell, x_delta_divisor) = params
             .columns
             .map(|cols| {
                 (
                     cols,
                     0,
-                    (cols * cell_pixel_width) as u32 * params.image_width / draw_width,
+                    texture_delta_divisor(cols * cell_pixel_width, params.image_width, draw_width),
                 )
             })
             .unwrap_or_else(|| {
                 (
-                    draw_width as usize / cell_pixel_width,
-                    draw_width as usize % cell_pixel_width,
-                    params.image_width,
+                    target_draw_width / cell_pixel_width,
+                    target_draw_width % cell_pixel_width,
+                    texture_delta_divisor(target_draw_width, params.image_width, draw_width),
                 )
             });
         let (fullcells_height, remainder_height_cell, y_delta_divisor) = params
@@ -111,14 +161,18 @@ impl TerminalState {
                 (
                     rows,
                     0,
-                    (rows * cell_pixel_height) as u32 * params.image_height / draw_height,
+                    texture_delta_divisor(
+                        rows * cell_pixel_height,
+                        params.image_height,
+                        draw_height,
+                    ),
                 )
             })
             .unwrap_or_else(|| {
                 (
-                    draw_height as usize / cell_pixel_height,
-                    draw_height as usize % cell_pixel_height,
-                    params.image_height,
+                    target_draw_height / cell_pixel_height,
+                    target_draw_height % cell_pixel_height,
+                    texture_delta_divisor(target_draw_height, params.image_height, draw_height),
                 )
             });
 
@@ -130,8 +184,6 @@ impl TerminalState {
             .with_context(|| format!("computing ypos {params:#?}"))?;
         let start_xpos = NotNan::new(params.source_origin_x as f32 / params.image_width as f32)
             .context("computing xpos")?;
-
-        let cursor_x = self.cursor.x;
 
         let width_in_cells = fullcells_width + one_or_zero::<usize>(remainder_width_cell > 0);
         let height_in_cells = fullcells_height + one_or_zero::<usize>(remainder_height_cell > 0);
@@ -226,10 +278,10 @@ impl TerminalState {
 
         // adjust cursor position if the drawn cells move beyond current cell
         let x_padding_shift: i64 = one_or_zero(
-            draw_width as usize + cell_padding_left as usize > cell_pixel_width * width_in_cells,
+            target_pixel_width + cell_padding_left as usize > cell_pixel_width * width_in_cells,
         );
         let y_padding_shift: i64 = one_or_zero(
-            draw_height as usize + cell_padding_top as usize > cell_pixel_height * height_in_cells,
+            target_pixel_height + cell_padding_top as usize > cell_pixel_height * height_in_cells,
         );
         if !params.do_not_move_cursor {
             // Sixel places the cursor under the left corner of the image,
@@ -318,5 +370,128 @@ fn one_or_zero<T: Zero + One>(b: bool) -> T {
         T::one()
     } else {
         T::zero()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::color::ColorPalette;
+    use crate::{TerminalConfiguration, TerminalSize};
+
+    #[derive(Debug)]
+    struct TestConfig;
+
+    impl TerminalConfiguration for TestConfig {
+        fn color_palette(&self) -> ColorPalette {
+            ColorPalette::default()
+        }
+    }
+
+    fn terminal(cols: usize, rows: usize) -> TerminalState {
+        TerminalState::new(
+            TerminalSize {
+                cols,
+                rows,
+                pixel_width: cols * 8,
+                pixel_height: rows * 16,
+                dpi: 96,
+            },
+            Arc::new(TestConfig),
+            "Kaku",
+            "test",
+            Box::new(Vec::new()),
+        )
+    }
+
+    fn image_data() -> Arc<ImageData> {
+        Arc::new(ImageData::with_data(ImageDataType::new_single_frame(
+            1,
+            1,
+            vec![0, 0, 0, 0xff],
+        )))
+    }
+
+    fn attach_params(
+        image_width: u32,
+        image_height: u32,
+        columns: Option<usize>,
+        rows: Option<usize>,
+        style: ImageAttachStyle,
+    ) -> ImageAttachParams {
+        ImageAttachParams {
+            image_width,
+            image_height,
+            source_width: None,
+            source_height: None,
+            source_origin_x: 0,
+            source_origin_y: 0,
+            cell_padding_left: 0,
+            cell_padding_top: 0,
+            z_index: 0,
+            columns,
+            rows,
+            image_id: None,
+            placement_id: None,
+            style,
+            do_not_move_cursor: false,
+            data: image_data(),
+        }
+    }
+
+    #[test]
+    fn automatic_image_scales_to_visible_terminal_area() {
+        let mut term = terminal(80, 24);
+
+        let info = term
+            .assign_image_to_cells(attach_params(
+                1600,
+                1600,
+                None,
+                None,
+                ImageAttachStyle::Sixel,
+            ))
+            .unwrap();
+
+        assert_eq!(info.cols, 48);
+        assert_eq!(info.rows, 24);
+    }
+
+    #[test]
+    fn automatic_image_scales_to_remaining_columns() {
+        let mut term = terminal(80, 24);
+        term.cursor.x = 70;
+
+        let info = term
+            .assign_image_to_cells(attach_params(
+                1600,
+                1600,
+                None,
+                None,
+                ImageAttachStyle::Sixel,
+            ))
+            .unwrap();
+
+        assert_eq!(info.cols, 10);
+        assert_eq!(info.rows, 5);
+    }
+
+    #[test]
+    fn explicit_image_placement_keeps_requested_cells() {
+        let mut term = terminal(80, 24);
+        term.cursor.x = 70;
+
+        let info = term
+            .assign_image_to_cells(attach_params(
+                1600,
+                1600,
+                Some(20),
+                Some(8),
+                ImageAttachStyle::Kitty,
+            ))
+            .unwrap();
+
+        assert_eq!(info.cols, 20);
+        assert_eq!(info.rows, 8);
     }
 }

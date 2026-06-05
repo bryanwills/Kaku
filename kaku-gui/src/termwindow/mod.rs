@@ -111,6 +111,18 @@ impl InputBroadcastMode {
         }
     }
 
+    fn should_broadcast_input(
+        self,
+        target_tab_id: Option<TabId>,
+        active_tab_id: Option<TabId>,
+        is_active_mux_pane: bool,
+        target_count: usize,
+    ) -> bool {
+        is_active_mux_pane
+            && target_count >= 2
+            && self.applies_to_active_tab(target_tab_id, active_tab_id)
+    }
+
     fn title_prefix(self) -> Option<&'static str> {
         match self {
             Self::Off => None,
@@ -5699,11 +5711,15 @@ impl TermWindow {
     }
 
     fn terminal_input_targets(&self, pane: &Arc<dyn Pane>) -> Vec<Arc<dyn Pane>> {
-        if self.input_broadcast_mode == InputBroadcastMode::Off {
-            return vec![pane.clone()];
-        }
-
-        if !self.is_active_mux_pane(pane) {
+        let target_tab_id = self.input_broadcast_target_tab_id();
+        let active_tab_id = self.active_tab_id();
+        let target_count = self.input_broadcast_target_count(self.input_broadcast_mode);
+        if !self.input_broadcast_mode.should_broadcast_input(
+            target_tab_id,
+            active_tab_id,
+            self.is_active_mux_pane(pane),
+            target_count,
+        ) {
             return vec![pane.clone()];
         }
 
@@ -6212,6 +6228,29 @@ mod tests {
         assert!(!InputBroadcastMode::CurrentTab.applies_to_active_tab(None, Some(tab_a)));
         assert!(InputBroadcastMode::AllTabs.applies_to_active_tab(Some(tab_a), Some(tab_b)));
         assert!(!InputBroadcastMode::Off.applies_to_active_tab(Some(tab_a), Some(tab_a)));
+    }
+
+    #[test]
+    fn broadcast_input_requires_explicit_mode_active_pane_and_multiple_targets() {
+        let tab_a = TabId::from(1usize);
+        let tab_b = TabId::from(2usize);
+
+        assert!(!InputBroadcastMode::Off.should_broadcast_input(Some(tab_a), Some(tab_a), true, 2));
+        assert!(!InputBroadcastMode::AllTabs.should_broadcast_input(None, Some(tab_a), false, 2));
+        assert!(!InputBroadcastMode::AllTabs.should_broadcast_input(None, Some(tab_a), true, 1));
+        assert!(InputBroadcastMode::AllTabs.should_broadcast_input(None, Some(tab_a), true, 2));
+        assert!(!InputBroadcastMode::CurrentTab.should_broadcast_input(
+            Some(tab_a),
+            Some(tab_b),
+            true,
+            2
+        ));
+        assert!(InputBroadcastMode::CurrentTab.should_broadcast_input(
+            Some(tab_a),
+            Some(tab_a),
+            true,
+            2
+        ));
     }
 
     #[test]
