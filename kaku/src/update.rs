@@ -2,11 +2,16 @@ use anyhow::{anyhow, bail, Context};
 use clap::Parser;
 
 #[derive(Debug, Parser, Clone, Default)]
-pub struct UpdateCommand {}
+pub struct UpdateCommand {
+    /// Apply the update without an interactive prompt. Required to update from a
+    /// non-interactive session (pipe, cron, CI); interactive runs still prompt.
+    #[arg(long)]
+    pub yes: bool,
+}
 
 impl UpdateCommand {
     pub fn run(&self) -> anyhow::Result<()> {
-        imp::run()
+        imp::run(self.yes)
     }
 }
 
@@ -14,7 +19,7 @@ impl UpdateCommand {
 mod imp {
     use anyhow::bail;
 
-    pub fn run() -> anyhow::Result<()> {
+    pub fn run(_assume_yes: bool) -> anyhow::Result<()> {
         bail!("`kaku update` is currently supported on macOS only")
     }
 }
@@ -65,7 +70,7 @@ mod imp {
         Brew(BrewInfo),
     }
 
-    pub fn run() -> anyhow::Result<()> {
+    pub fn run(assume_yes: bool) -> anyhow::Result<()> {
         match resolve_update_provider()? {
             UpdateProvider::Brew(info) => {
                 println!("Detected Homebrew-managed installation. Using brew upgrade...");
@@ -140,17 +145,29 @@ mod imp {
             }
         }
 
-        let zip_url = release
-            .as_ref()
-            .and_then(|rel| find_asset(&rel.assets, UPDATE_ZIP_NAME))
-            .map(|asset| asset.browser_download_url.as_str())
-            .unwrap_or(LATEST_ZIP_URL);
-
-        let sha_url = release
-            .as_ref()
-            .and_then(|rel| find_asset(&rel.assets, UPDATE_SHA_NAME))
-            .map(|asset| asset.browser_download_url.as_str())
-            .or(Some(LATEST_SHA_URL));
+        // Keep the checksum source consistent with the package source. A pinned
+        // release ZIP must be verified against the *same* release's checksum,
+        // never a floating `latest` one: mixing a pinned artifact with a
+        // floating hash can falsely abort a good update or verify the wrong
+        // build. Only fall back to the latest pair when the ZIP itself does.
+        let (zip_url, sha_url) = match release.as_ref() {
+            Some(rel) => {
+                let zip = find_asset(&rel.assets, UPDATE_ZIP_NAME)
+                    .map(|a| a.browser_download_url.as_str());
+                let sha = find_asset(&rel.assets, UPDATE_SHA_NAME)
+                    .map(|a| a.browser_download_url.as_str());
+                match (zip, sha) {
+                    (Some(zip), Some(sha)) => (zip, sha),
+                    (Some(_), None) => bail!(
+                        "release `{}` is missing checksum asset `{}`; refusing to install an unverified build",
+                        rel.tag_name,
+                        UPDATE_SHA_NAME
+                    ),
+                    _ => (LATEST_ZIP_URL, LATEST_SHA_URL),
+                }
+            }
+            None => (LATEST_ZIP_URL, LATEST_SHA_URL),
+        };
 
         let update_root = config::DATA_DIR.join("updates");
         config::create_user_owned_dirs(&update_root).context("create updates directory")?;
@@ -173,13 +190,11 @@ mod imp {
         curl_download_to_file(zip_url, &zip_path, &current_version, &proxy)
             .context("failed to download update package")?;
 
-        if let Some(sha_url) = sha_url {
-            println!("Verifying package checksum...");
-            let checksum_text = curl_get_text(sha_url, &current_version, &proxy).context(
-                "failed to fetch checksum; aborting to avoid installing an unverified build",
-            )?;
-            verify_sha256(&zip_path, &checksum_text).context("checksum verification failed")?;
-        }
+        println!("Verifying package checksum...");
+        let checksum_text = curl_get_text(sha_url, &current_version, &proxy).context(
+            "failed to fetch checksum; aborting to avoid installing an unverified build",
+        )?;
+        verify_sha256(&zip_path, &checksum_text).context("checksum verification failed")?;
 
         let extracted_dir = work_dir.join("extracted");
         config::create_user_owned_dirs(&extracted_dir).context("create extraction directory")?;
@@ -211,6 +226,9 @@ mod imp {
             }
         }
 
+        verify_app_signature(&new_app_path)
+            .context("downloaded update failed code-signature verification; refusing to install")?;
+
         let target_app = resolve_target_app_path().context("resolve installed Kaku.app path")?;
         ensure_can_write_target(&target_app)?;
 
@@ -221,7 +239,7 @@ mod imp {
             .as_ref()
             .map(|r| r.tag_name.as_str())
             .unwrap_or("latest");
-        if !confirm_apply_update(update_label)? {
+        if !confirm_apply_update(update_label, assume_yes)? {
             println!("Update cancelled.");
             let _ = fs::remove_dir_all(&work_dir);
             return Ok(());
@@ -742,7 +760,32 @@ mod imp {
         Ok(())
     }
 
-    fn confirm_apply_update(update_label: &str) -> anyhow::Result<bool> {
+    fn verify_app_signature(app_path: &Path) -> anyhow::Result<()> {
+        // The SHA-256 check only proves the bytes match a hash served from the
+        // same origin. codesign + Gatekeeper prove the bundle is intact and
+        // signed by a trusted, notarized Developer ID before we replace the
+        // installed app. Release builds staple the notarization ticket, so
+        // `spctl --assess` succeeds offline (see scripts/notarize.sh).
+        run_status(
+            Command::new("/usr/bin/codesign")
+                .arg("--verify")
+                .arg("--deep")
+                .arg("--strict")
+                .arg(app_path),
+            "verify update code signature",
+        )?;
+        run_status(
+            Command::new("/usr/sbin/spctl")
+                .arg("--assess")
+                .arg("--type")
+                .arg("execute")
+                .arg(app_path),
+            "assess update with Gatekeeper",
+        )?;
+        Ok(())
+    }
+
+    fn confirm_apply_update(update_label: &str, assume_yes: bool) -> anyhow::Result<bool> {
         // When launched from the GUI (menu / notification), the env var is set
         // so the update proceeds without interactive confirmation.
         if std::env::var_os("KAKU_UPDATE_AUTO_CONFIRM").is_some() {
@@ -751,7 +794,16 @@ mod imp {
         }
 
         if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
-            return Ok(true);
+            // No TTY to prompt on. Replacing the running app is destructive, so
+            // require explicit opt-in rather than silently proceeding in a
+            // pipe / cron / CI context.
+            if assume_yes {
+                return Ok(true);
+            }
+            bail!(
+                "Refusing to apply a binary-replacing update in a non-interactive session.\n\
+                 Re-run `kaku update --yes` (or set KAKU_UPDATE_AUTO_CONFIRM=1) to proceed."
+            );
         }
 
         println!();
