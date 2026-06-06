@@ -10,13 +10,94 @@
   <meta property="og:description" content="一个快速、开箱即用的 macOS 终端：标签、分屏、好看的默认值，AI 助手随时待命。">
   <meta property="og:type" content="website">
   <meta property="og:image" content="https://kaku.fun/shots/kaku-dark.webp">
+  <meta property="og:image:width" content="1920">
+  <meta property="og:image:height" content="1192">
+  <meta property="og:image:alt" content="Kaku 深色主题终端，含标签、分屏和工具">
   <meta property="og:url" content="https://kaku.fun/zh/">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://kaku.fun/shots/kaku-dark.webp">
   <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-kaku-32.png"><link rel="icon" type="image/png" sizes="192x192" href="/img/favicon-kaku-192.png"><link rel="apple-touch-icon" href="/img/favicon-kaku-180.png">
   <link rel="alternate" hreflang="zh-CN" href="https://kaku.fun/zh/">
   <link rel="canonical" href="https://kaku.fun/zh/">
   <link rel="alternate" hreflang="en" href="https://kaku.fun/">
+  <link rel="alternate" hreflang="x-default" href="https://kaku.fun/">
   <link rel="stylesheet" href="/styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Kaku",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS",
+    "softwareVersion": "0.12.0",
+    "url": "https://kaku.fun",
+    "downloadUrl": "https://github.com/tw93/Kaku/releases/latest",
+    "license": "https://opensource.org/licenses/MIT",
+    "sameAs": "https://github.com/tw93/Kaku",
+    "author": {
+      "@type": "Person",
+      "name": "Tw93",
+      "url": "https://tw93.fun",
+      "sameAs": [
+        "https://github.com/tw93",
+        "https://x.com/HiTw93"
+      ]
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "怎么安装？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "从 GitHub Releases 下载 DMG，或用 Homebrew tap：brew install tw93/tap/kakuku，Homebrew 上曾有无关的 kaku 包，使用 tap 可以避免装错。"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Kaku 和 iTerm2 有什么区别？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "iTerm2 是成熟的 macOS 终端。Kaku 更轻更快，带实用默认值、顺手的标签和分屏、一套精选 Shell 工具，并内建 AI 助手，开箱即用。"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Kaku 和 Warp 有什么区别？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Warp 是闭源并偏云端账号体系。Kaku 是 MIT 开源，不需要账号，AI 请求只发往你配置的 Provider。"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Kaku 收费吗？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "不收费，Kaku 是 MIT 协议的开源项目。"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "支持 Windows 或 Linux 吗？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "暂时不支持，当前重点是先把 macOS 原生体验打磨稳定。"
+        }
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到正文</a>
@@ -117,10 +198,10 @@
           <p>安装、配置 AI，再按自己的习惯微调终端，不需要先读完整文档。</p>
         </div>
         <div class="workflow-list">
-          <article class="workflow-item"><span class="mark">01</span><h2>安装</h2><p>用 DMG，或运行 <code>brew install tw93/tap/kakuku</code>，再用 <code>kaku doctor</code> 检查 app、PATH 和 shell 集成。</p></article>
-          <article class="workflow-item"><span class="mark">02</span><h2>AI 设置</h2><p>运行 <code>kaku ai</code>，选择 Codex、OpenAI 或自定义 Provider。配置好后，<span class="sk">Cmd + L</span> 打开 AI Chat。</p></article>
-          <article class="workflow-item"><span class="mark">03</span><h2>工具</h2><p><span class="sk">Cmd + Shift + G</span> 打开 Lazygit，<span class="sk">Cmd + Shift + Y</span> 打开 Yazi，SSH 会话里用 <span class="sk">Cmd + Shift + R</span> 挂载远端文件。</p></article>
-          <article class="workflow-item"><span class="mark">04</span><h2>配置</h2><p>打开 <code>kaku config</code> 调整字号、透明度、Smart Tab、关闭确认、快捷键和 Lua 配置。</p></article>
+          <article class="workflow-item"><span class="mark">01</span><h3>安装</h3><p>用 DMG，或运行 <code>brew install tw93/tap/kakuku</code>，再用 <code>kaku doctor</code> 检查 app、PATH 和 shell 集成。</p></article>
+          <article class="workflow-item"><span class="mark">02</span><h3>AI 设置</h3><p>运行 <code>kaku ai</code>，选择 Codex、OpenAI 或自定义 Provider。配置好后，<span class="sk">Cmd + L</span> 打开 AI Chat。</p></article>
+          <article class="workflow-item"><span class="mark">03</span><h3>工具</h3><p><span class="sk">Cmd + Shift + G</span> 打开 Lazygit，<span class="sk">Cmd + Shift + Y</span> 打开 Yazi，SSH 会话里用 <span class="sk">Cmd + Shift + R</span> 挂载远端文件。</p></article>
+          <article class="workflow-item"><span class="mark">04</span><h3>配置</h3><p>打开 <code>kaku config</code> 调整字号、透明度、Smart Tab、关闭确认、快捷键和 Lua 配置。</p></article>
         </div>
       </div>
     </section>
@@ -158,6 +239,5 @@
     </section>
   </main>
   <footer class="site-footer"><div class="wide footer-inner"><div class="footer-mark"><img src="/img/kaku-mark.png" width="64" height="64" alt="Kaku" loading="lazy"><div><p class="wm-name">Kaku · 書</p><p class="wm-sub">AI 编码时代的 macOS 终端。</p></div></div><div class="footer-colophon"><p class="footer-links"><a href="/zh/roadmap">Roadmap</a> · <a href="https://github.com/tw93/Kaku/releases" target="_blank" rel="noopener noreferrer">Changelog</a> · <a href="/zh/docs/">文档</a> · <a href="https://github.com/tw93/Kaku">GitHub</a> · <a href="https://github.com/tw93/Kaku/issues">Issues</a> · <a href="https://twitter.com/HiTw93">X</a></p><p class="footer-ethos">Tw93 出品。愿终端不再挡你的路。 · Built on WezTerm · MIT · © 2026</p></div></div></footer>
-  <script src="/script.js"></script>
 </body>
 </html>

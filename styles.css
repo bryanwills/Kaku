@@ -58,7 +58,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 #main-content { flex: 1 0 auto; }
-body::before { content: none; }
 a { color: var(--brand); text-decoration: none; }
 a:hover { color: var(--brand-light); }
 img { max-width: 100%; height: auto; }
@@ -93,7 +92,6 @@ button, input { font: inherit; }
 }
 .skip-link:focus { transform: translateY(0); }
 
-.container { max-width: 760px; margin: 0 auto; padding: 0 24px; }
 .wide { max-width: 1280px; margin: 0 auto; padding: 0 64px; }
 .hero-wrap { max-width: 1280px; margin: 0 auto; padding: 0 64px; }
 .section { padding: 0; margin-bottom: 72px; }
@@ -311,8 +309,6 @@ button, input { font: inherit; }
   justify-content: flex-start;
   margin-top: 0;
 }
-.copy-command code { color: inherit; font-size: 13px; background: none; }
-.copy-hint { color: var(--ink-muted); font-size: 12px; }
 .hero-trust {
   display: flex;
   flex-wrap: wrap;
@@ -327,10 +323,6 @@ button, input { font: inherit; }
   content: "·";
   margin: 0 10px;
   color: color-mix(in srgb, var(--ink-muted) 58%, transparent);
-}
-.hero-trust b {
-  color: var(--ink-dim);
-  font-weight: 600;
 }
 .terminal-window {
   overflow: hidden;
@@ -451,7 +443,7 @@ button, input { font: inherit; }
   font-size: 12px;
   letter-spacing: 0.3px;
 }
-.workflow-item h2 {
+.workflow-item h3 {
   margin: 0;
   color: var(--ink);
   font-size: 24px;
@@ -491,7 +483,7 @@ button, input { font: inherit; }
   letter-spacing: 0.2px;
 }
 
-.quick-grid, .method-grid, .doc-grid {
+.quick-grid, .doc-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
@@ -551,19 +543,6 @@ button, input { font: inherit; }
 }
 .doc-card:hover h2 { color: var(--brand); }
 .doc-card > span { display: none; }
-.code-box {
-  display: block;
-  overflow-x: auto;
-  margin: 0;
-  padding: 14px;
-  border: 1px solid var(--term-line);
-  border-radius: var(--radius-sm);
-  background: var(--term);
-  color: var(--green-bright);
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.5;
-}
 .page-hero {
   padding: 46px 0 32px;
   background: var(--paper);
@@ -1072,7 +1051,7 @@ button, input { font: inherit; }
   .docs-menu { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .section-toc { display: none; }
   .section-toc p { grid-column: 1 / -1; }
-  .quick-grid, .method-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workflow-item, .feature { grid-template-columns: 48px minmax(0, 1fr); gap: 10px 18px; }
   .workflow-item p, .feature span:last-child { grid-column: 2; }
   .section { margin-bottom: 54px; }
@@ -1085,7 +1064,7 @@ button, input { font: inherit; }
   .wide, .hero-wrap, .nav-inner, .hero-centered { padding: 0 28px; }
 }
 @media (max-width: 560px) {
-  .container, .wide, .hero-wrap, .hero-centered { padding: 0 16px; }
+  .wide, .hero-wrap, .hero-centered { padding: 0 16px; }
   .site-nav { padding: 20px 0 0; }
   .site-nav .nav-inner { padding: 0 16px; gap: 8px 12px; flex-wrap: wrap; }
   .nav-links { gap: 12px; }
@@ -1096,7 +1075,7 @@ button, input { font: inherit; }
   .hero h1 { font-size: 56px; }
   .hero-actions { flex-wrap: wrap; gap: 12px; }
   .btn { padding: 12px 22px; font-size: 14px; }
-  .feature-grid, .quick-grid, .method-grid, .doc-grid, .doc-pager, .gallery { grid-template-columns: 1fr; }
+  .feature-grid, .quick-grid, .doc-grid, .doc-pager, .gallery { grid-template-columns: 1fr; }
   .docs-sidebar { gap: 12px; }
   .docs-menu {
     display: flex;
