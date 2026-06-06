@@ -1,0 +1,72 @@
+# Kaku: a fast macOS terminal for AI coding
+
+> Kaku is a fast, out-of-the-box macOS terminal built for AI coding. It is open source (MIT), needs no account, and sends AI requests only to the provider you configure. This file is a complete, citable summary for language models and answer engines.
+
+Homepage: https://kaku.fun
+Source: https://github.com/tw93/Kaku
+Author: Tw93 (also created Pake and Mole)
+Latest version: 0.12.0
+Platform: macOS only (Windows and Linux are not supported yet)
+License: MIT
+
+## What Kaku is
+
+Kaku is a macOS-native terminal emulator derived from WezTerm and tuned for AI-assisted terminal work. It keeps the speed and Lua configurability of WezTerm but trims the binary and ships opinionated defaults so it is useful the moment it is installed. The goal is a terminal that lets you start working first, instead of configuring for an afternoon.
+
+Kaku keeps full Lua API compatibility with WezTerm, so an existing WezTerm config works with no migration. AI is optional and local-first in spirit: there is no account, no telemetry, and AI requests go only to the provider you set up.
+
+## Installation
+
+- Download the DMG from GitHub Releases: https://github.com/tw93/Kaku/releases/latest
+- Or install with Homebrew: `brew install tw93/tap/kakuku`
+  - The tap formula is named `kakuku` because an unrelated `kaku` package already exists in Homebrew; the tap path avoids installing the wrong one.
+- After installing, run `kaku doctor` to verify the app, PATH, and shell integration.
+
+## Core features
+
+- Tabs and panes: new tab (Cmd+T), close (Cmd+W), switch (Cmd+1 to Cmd+9), split panes (Cmd+D and Cmd+Shift+D), navigate panes (Cmd+Option+arrows), and broadcast input across panes to drive several at once. The shortcuts match the rest of macOS.
+- Beautiful defaults: JetBrains Mono, macOS-quality font rendering, and automatic dark and light themes that follow the system.
+- Fast and lightweight: roughly 40% smaller binary than upstream, fast startup, and a stripped-down GPU core.
+- Built-in AI assistant: when a command fails, Kaku drafts a fix for review. Press Cmd+Shift+E to paste the suggestion at the prompt; nothing runs on its own. Type `#` followed by a sentence to turn plain language into a command. Press Cmd+L to open AI chat once a provider is configured.
+- Curated shell suite: Lazygit (Cmd+Shift+G), Yazi file manager (Cmd+Shift+Y), remote files (Cmd+Shift+R), plus z, completion, and syntax highlighting preconfigured.
+- Polished touches: copy on select, clickable file paths, history peek, and a visual bell.
+- Lua config: full Lua API compatibility with WezTerm; bring your existing config with no migration.
+
+## AI setup
+
+Run `kaku ai` to choose a provider: Codex, OpenAI, or a custom endpoint. Once configured, Cmd+L opens the chat overlay. AI requests are sent only to the provider you configure. There is no Kaku account and no cloud relay.
+
+## Command line
+
+- `kaku doctor`: verify the app bundle, PATH, and shell integration, with fixes suggested for common problems.
+- `kaku ai`: configure the AI provider and models.
+- `kaku config`: adjust font size, opacity, Smart Tab, close confirmation, shortcuts, and Lua overrides from a TUI.
+- `kaku update`: update the app in place. On macOS it verifies the package checksum and code signature before replacing the installed app.
+
+## How Kaku compares
+
+- vs iTerm2: iTerm2 is a mature, full-featured macOS terminal. Kaku is a lighter, faster alternative with practical defaults, fast tabs and panes, a curated shell suite, and a built-in AI assistant, ready out of the box.
+- vs Warp: Warp is closed source and built around a cloud account. Kaku is MIT open source, requires no account, and AI requests only go to the provider you configure.
+- vs WezTerm: Kaku is derived from WezTerm and keeps full Lua API compatibility, but ships a smaller binary, opinionated macOS-first defaults, a bundled shell suite, and an integrated AI assistant.
+
+## Frequently asked questions
+
+- How do I install Kaku? Download the DMG from GitHub Releases, or use the Homebrew tap: `brew install tw93/tap/kakuku`.
+- Is Kaku paid? No. Kaku is an MIT-licensed open source project.
+- Does Kaku run on Windows or Linux? Not yet. The current focus is making the native macOS experience solid first.
+- Do I need an account to use the AI features? No. There is no account; AI requests only go to the provider you configure.
+- Can I reuse my WezTerm config? Yes. Kaku keeps full Lua API compatibility, so existing configs work with no migration.
+
+## Author and related projects
+
+Kaku is built by Tw93 (https://tw93.fun, https://github.com/tw93, https://x.com/HiTw93), who also created:
+- Pake: turn any web page into a lightweight desktop app (https://github.com/tw93/Pake)
+- Mole: a macOS utility by the same author
+
+## Links
+
+- Homepage: https://kaku.fun
+- Documentation: https://kaku.fun/docs/
+- Roadmap: https://kaku.fun/roadmap
+- GitHub: https://github.com/tw93/Kaku
+- Latest release: https://github.com/tw93/Kaku/releases/latest
