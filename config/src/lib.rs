@@ -774,8 +774,8 @@ end
 -- config.window_padding = { left = '24px', right = '24px', top = '40px', bottom = '20px' }
 --
 -- 4) Window transparency and blur
--- config.window_background_opacity = 0.95
--- config.macos_window_background_blur = 20
+-- config.window_background_opacity = 0.95            -- opacity, 0.0 to 1.0
+-- config.macos_window_background_blur = 20           -- blur radius, integer 0 to 100
 --
 -- 5) Copy on select
 -- config.copy_on_select = false
