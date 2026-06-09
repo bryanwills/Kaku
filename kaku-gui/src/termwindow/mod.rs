@@ -3889,6 +3889,25 @@ impl TermWindow {
         promise::spawn::spawn(future).detach();
     }
 
+    /// Show a confirmation overlay before applying a pending update, since
+    /// applying closes every window and stops running tasks. Routed here from
+    /// the update toast click via the front window.
+    pub(crate) fn show_update_confirmation(&mut self) {
+        let mux = Mux::get();
+        let tab = match mux.get_active_tab_for_window(self.mux_window_id) {
+            Some(tab) => tab,
+            None => return,
+        };
+
+        if let Some(window) = self.window.clone() {
+            let (overlay, future) = start_overlay(self, &tab, move |tab_id, term| {
+                crate::overlay::confirm_apply_update(term, window, tab_id)
+            });
+            self.assign_overlay(tab.tab_id(), overlay);
+            promise::spawn::spawn(future).detach();
+        }
+    }
+
     fn show_tab_navigator(&mut self) {
         let mux = Mux::get();
         let active_tab_idx = match mux.get_window(self.mux_window_id) {

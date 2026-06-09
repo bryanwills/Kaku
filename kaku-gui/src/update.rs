@@ -745,15 +745,13 @@ pub fn start_update_checker() {
         // dialog on first launch, rather than lazily when a notification fires.
         wezterm_toast_notification::macos_initialize();
 
-        // Register callback so notification clicks trigger the right action:
-        // if a staged update is ready, restart-to-update directly;
-        // otherwise, fall back to the terminal-tab flow.
+        // Register callback so a notification click asks for confirmation
+        // before doing anything destructive. Applying an update closes every
+        // window and stops running tasks, so a stray click must not trigger it
+        // silently. The confirmed action picks the staged fast-path or the
+        // terminal-tab flow inside apply_update_now().
         wezterm_toast_notification::set_update_click_callback(|| {
-            if staged_update_available().is_some() {
-                crate::frontend::restart_to_update();
-            } else {
-                crate::frontend::run_kaku_update_from_menu();
-            }
+            crate::frontend::confirm_and_apply_update();
         });
 
         // Check if we just completed an update and show notification

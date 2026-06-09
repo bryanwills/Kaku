@@ -172,6 +172,37 @@ pub fn run_kaku_update_from_menu() {
     run_kaku_subcommand_in_new_tab("update", Some(&UPDATE_RUNNING));
 }
 
+/// Entry point for the update toast click. Routes to the front GUI window and
+/// shows a confirmation overlay before anything destructive happens, so a
+/// stray click can no longer kill running tasks. Falls back to applying
+/// directly only when there is no GUI window to host the overlay.
+pub fn confirm_and_apply_update() {
+    promise::spawn::spawn_into_main_thread(async move {
+        if let Some(fe) = try_front_end() {
+            if let Some(gui) = fe.gui_windows().first() {
+                gui.window
+                    .notify(TermWindowNotif::Apply(Box::new(|tw| {
+                        tw.show_update_confirmation();
+                    })));
+                return;
+            }
+        }
+        apply_update_now();
+    })
+    .detach();
+}
+
+/// Apply the pending update now. Called only after the user confirms in the
+/// update overlay (or as a fallback when no window can host the overlay).
+/// Uses the staged fast-path when available, else the terminal-tab flow.
+pub(crate) fn apply_update_now() {
+    if crate::update::staged_update_available().is_some() {
+        restart_to_update();
+    } else {
+        run_kaku_update_from_menu();
+    }
+}
+
 /// Apply a previously staged update by spawning the helper script directly,
 /// without opening a terminal tab.
 pub fn restart_to_update() {
