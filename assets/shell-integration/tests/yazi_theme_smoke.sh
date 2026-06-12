@@ -180,4 +180,72 @@ output="$(
 assert_file_contains 'dark = "kaku-light"' "$theme_light"
 assert_file_contains 'light = "kaku-light"' "$theme_light"
 
+# Fresh configs must use the #:schema comment yazi supports, never a $schema key
+# (yazi >= 26.5.6 rejects the key and fails to start, see issue #457).
+keymap_new="$home_new/.config/yazi/keymap.toml"
+assert_file_contains '#:schema https://yazi-rs.github.io/schemas/theme.json' "$theme_new"
+assert_file_not_contains '$schema' "$theme_new"
+assert_file_contains '#:schema https://yazi-rs.github.io/schemas/keymap.json' "$keymap_new"
+assert_file_not_contains '$schema' "$keymap_new"
+
+# Setup migrates $schema keys written by older Kaku versions, quoted or bare,
+# and keeps the user's own content.
+home_schema="$tmp_dir/home-schema"
+mkdir -p "$home_schema/.config/yazi"
+cat <<'EOF' >"$home_schema/.config/yazi/theme.toml"
+"$schema" = "https://yazi-rs.github.io/schemas/theme.json"
+
+[mode]
+normal_main = { fg = "#a277ff" }
+EOF
+cat <<'EOF' >"$home_schema/.config/yazi/keymap.toml"
+$schema = "https://yazi-rs.github.io/schemas/keymap.json"
+
+[mgr]
+prepend_keymap = []
+EOF
+
+run_setup "$home_schema"
+
+theme_schema="$home_schema/.config/yazi/theme.toml"
+keymap_schema="$home_schema/.config/yazi/keymap.toml"
+assert_file_contains '#:schema https://yazi-rs.github.io/schemas/theme.json' "$theme_schema"
+assert_file_not_contains '$schema' "$theme_schema"
+assert_file_contains 'normal_main = { fg = "#a277ff" }' "$theme_schema"
+assert_file_contains '[flavor]' "$theme_schema"
+assert_file_contains '#:schema https://yazi-rs.github.io/schemas/keymap.json' "$keymap_schema"
+assert_file_not_contains '$schema' "$keymap_schema"
+assert_file_contains 'prepend_keymap = []' "$keymap_schema"
+
+# The installed wrapper self-heals $schema keys before every yazi launch.
+cat <<'EOF' >"$home_light/.config/yazi/keymap.toml"
+"$schema" = "https://yazi-rs.github.io/schemas/keymap.json"
+
+[mgr]
+prepend_keymap = []
+EOF
+output="$(
+  HOME="$home_light" \
+  PATH="$home_light/.config/kaku/zsh/bin:$tmp_dir/realbin:$PATH" \
+  "$wrapper_light" --version
+)"
+[[ "$output" == "real-yazi --version" ]]
+assert_file_contains '#:schema https://yazi-rs.github.io/schemas/keymap.json' "$home_light/.config/yazi/keymap.toml"
+assert_file_not_contains '$schema' "$home_light/.config/yazi/keymap.toml"
+
+# When a real yazi is installed, gate the generated configs through its parser.
+real_yazi=""
+for candidate in /opt/homebrew/bin/yazi /usr/local/bin/yazi /opt/local/bin/yazi; do
+	if [[ -x "$candidate" ]]; then
+		real_yazi="$candidate"
+		break
+	fi
+done
+if [[ -n "$real_yazi" ]]; then
+	YAZI_CONFIG_HOME="$home_new/.config/yazi" "$real_yazi" --version >/dev/null 2>&1 </dev/null \
+		|| fail "generated yazi config rejected by $real_yazi"
+	YAZI_CONFIG_HOME="$home_schema/.config/yazi" "$real_yazi" --version >/dev/null 2>&1 </dev/null \
+		|| fail "migrated yazi config rejected by $real_yazi"
+fi
+
 echo "yazi_theme smoke test passed"

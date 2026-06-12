@@ -201,6 +201,27 @@ is_legacy_kaku_yazi_theme_file() {
 	[[ "$normalized" == "$expected" ]]
 }
 
+# yazi >= 26.5.6 rejects a `$schema` key in its config files; the supported
+# form is a `#:schema <url>` comment. Older Kaku versions wrote the key, which
+# makes yazi fail to start, so rewrite those lines in existing user configs.
+migrate_yazi_schema_headers() {
+	local file tmp_file
+	for file in "$YAZI_THEME_FILE" "$YAZI_KEYMAP_FILE" "$YAZI_CONFIG_FILE"; do
+		[[ -f "$file" && -w "$file" ]] || continue
+		grep -Eq '^[[:space:]]*"?\$schema"?[[:space:]]*=' "$file" || continue
+		tmp_file="$(mktemp "${TMPDIR:-/tmp}/kaku-yazi-schema.XXXXXX")" || continue
+		if sed -E \
+			-e 's|^[[:space:]]*"?\$schema"?[[:space:]]*=[[:space:]]*"([^"]+)".*$|#:schema \1|' \
+			-e '/^[[:space:]]*"?\$schema"?[[:space:]]*=/d' \
+			"$file" >"$tmp_file"; then
+			mv "$tmp_file" "$file"
+			echo -e "  ${GREEN}✓${NC} ${BOLD}Config${NC}      Migrated yazi \$schema key to #:schema comment ${NC}($(basename "$file"))${NC}"
+		else
+			rm -f "$tmp_file"
+		fi
+	done
+}
+
 sync_kaku_yazi_flavors() {
 	if [[ ! -d "$KAKU_YAZI_FLAVOR_SOURCE_DIR" ]]; then
 		echo -e "${YELLOW}Warning: bundled Yazi flavors are missing at $KAKU_YAZI_FLAVOR_SOURCE_DIR.${NC}"
@@ -238,7 +259,7 @@ ensure_kaku_yazi_theme() {
 
 	if [[ ! -f "$YAZI_THEME_FILE" ]] || is_legacy_kaku_yazi_theme_file; then
 		cat <<EOF >"$YAZI_THEME_FILE"
-\$schema = "https://yazi-rs.github.io/schemas/theme.json"
+#:schema https://yazi-rs.github.io/schemas/theme.json
 
 # Kaku manages the [flavor] section below so Yazi matches the current Kaku theme.
 # Add your own theme overrides in other sections if needed.
@@ -376,7 +397,7 @@ ensure_theme() {
 
 	if [[ ! -f "$YAZI_THEME_FILE" ]]; then
 		cat <<BLOCK >"$YAZI_THEME_FILE"
-\$schema = "https://yazi-rs.github.io/schemas/theme.json"
+#:schema https://yazi-rs.github.io/schemas/theme.json
 
 # Kaku manages the [flavor] section below so Yazi matches the current Kaku theme.
 $(managed_block "$flavor")
@@ -411,6 +432,25 @@ BLOCK
 	rm -f "$tmp_theme"
 }
 
+# yazi >= 26.5.6 rejects a `$schema` key in its config files; older Kaku
+# versions wrote one, so rewrite it to the supported `#:schema` comment.
+migrate_schema_headers() {
+	local file tmp_file
+	for file in "$YAZI_THEME_FILE" "${HOME}/.config/yazi/keymap.toml"; do
+		[[ -f "$file" && -w "$file" ]] || continue
+		grep -Eq '^[[:space:]]*"?\$schema"?[[:space:]]*=' "$file" || continue
+		tmp_file="$(mktemp "${TMPDIR:-/tmp}/kaku-yazi-schema.XXXXXX")" || continue
+		if sed -E \
+			-e 's|^[[:space:]]*"?\$schema"?[[:space:]]*=[[:space:]]*"([^"]+)".*$|#:schema \1|' \
+			-e '/^[[:space:]]*"?\$schema"?[[:space:]]*=/d' \
+			"$file" >"$tmp_file"; then
+			mv "$tmp_file" "$file"
+		else
+			rm -f "$tmp_file"
+		fi
+	done
+}
+
 resolve_real_yazi() {
 	local candidate
 
@@ -440,6 +480,7 @@ resolve_real_yazi() {
 
 main() {
 	local flavor real_bin
+	migrate_schema_headers
 	flavor="$(current_flavor)"
 	ensure_theme "$flavor"
 
@@ -570,6 +611,9 @@ if [[ ! -f "$STARSHIP_CONFIG" ]]; then
 		fi
 	fi
 fi
+
+# Repair yazi configs written by older Kaku versions before touching them.
+migrate_yazi_schema_headers
 
 # Initialize Yazi layout config if the user has not created one yet.
 if [[ ! -f "$YAZI_CONFIG_FILE" ]]; then
@@ -702,7 +746,7 @@ ensure_yazi_edit_opener
 if [[ ! -f "$YAZI_KEYMAP_FILE" ]]; then
 	mkdir -p "$YAZI_CONFIG_DIR"
 	cat <<EOF >"$YAZI_KEYMAP_FILE"
-\$schema = "https://yazi-rs.github.io/schemas/keymap.json"
+#:schema https://yazi-rs.github.io/schemas/keymap.json
 
 [mgr]
 prepend_keymap = [

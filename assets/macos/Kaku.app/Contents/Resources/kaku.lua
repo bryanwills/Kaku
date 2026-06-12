@@ -2240,8 +2240,39 @@ local function sync_managed_yazi_theme(window)
     return
   end
 
+  -- yazi >= 26.5.6 rejects a `$schema` key in its config files (the supported
+  -- form is a `#:schema <url>` comment); older Kaku versions wrote the key,
+  -- which makes yazi fail to start, so rewrite it in existing user configs.
+  -- Nested on purpose: the top-level chunk is at Lua's 200-local limit.
+  local function migrate_schema_header(path)
+    local content = read_text_file(path)
+    if not content then
+      return
+    end
+
+    local changed = false
+    local lines = {}
+    for line in (content .. "\n"):gmatch("(.-)\n") do
+      if line:match('^%s*"?%$schema"?%s*=') then
+        local url = line:match('=%s*"([^"]+)"')
+        if url then
+          table.insert(lines, "#:schema " .. url)
+        end
+        changed = true
+      else
+        table.insert(lines, line)
+      end
+    end
+
+    if changed then
+      write_text_file(path, table.concat(lines, "\n"))
+    end
+  end
+
   local yazi_dir = home .. "/.config/yazi"
   local theme_path = yazi_dir .. "/theme.toml"
+  migrate_schema_header(theme_path)
+  migrate_schema_header(yazi_dir .. "/keymap.toml")
   local flavor = current_yazi_flavor(window)
   local managed_block = build_managed_yazi_theme_block(flavor)
 
@@ -2261,7 +2292,7 @@ local function sync_managed_yazi_theme(window)
   local updated
   if existing == "" or is_legacy_kaku_yazi_theme(existing) then
     updated = table.concat({
-      '"$schema" = "https://yazi-rs.github.io/schemas/theme.json"',
+      "#:schema https://yazi-rs.github.io/schemas/theme.json",
       "",
       "# Kaku manages the [flavor] section below so Yazi matches the current Kaku theme.",
       managed_block,
