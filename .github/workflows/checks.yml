@@ -1,4 +1,4 @@
-name: CI
+name: Checks
 
 on:
   push:
@@ -22,9 +22,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: checks-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Fast correctness gates that run on every push. Release-shaped build
+# validation (universal binaries, app bundle assembly) lives in
+# build-validation.yml so routine pushes are not gated on ~25 minutes of
+# release builds; see that workflow for its triggers.
 jobs:
   fmt:
     name: Format
@@ -77,7 +81,6 @@ jobs:
   test:
     name: Unit Tests
     runs-on: macos-latest
-    needs: fmt
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -151,7 +154,6 @@ jobs:
   check:
     name: Cargo Check
     runs-on: macos-latest
-    needs: fmt
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -183,7 +185,6 @@ jobs:
   relay-check:
     name: Relay Build
     runs-on: macos-latest
-    needs: fmt
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -210,7 +211,6 @@ jobs:
   clippy:
     name: Clippy
     runs-on: macos-latest
-    needs: fmt
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -254,70 +254,3 @@ jobs:
 
       - name: Check bundled config version
         run: ./scripts/check_release_config.sh
-
-  universal-build:
-    name: Universal Build Validation
-    runs-on: macos-latest
-    needs: [check, test]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-        with:
-          toolchain: 1.93.0
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
-      - name: Build both targets
-        run: |
-          set -o pipefail
-          cargo build --locked --release --target aarch64-apple-darwin -p kaku -p kaku-gui 2>&1 | sed '/has no symbols/d'
-          cargo build --locked --release --target x86_64-apple-darwin -p kaku -p kaku-gui 2>&1 | sed '/has no symbols/d'
-
-      - name: Lipo merge and verify
-        run: |
-          mkdir -p target/universal/release
-          lipo -create -output target/universal/release/kaku \
-            target/aarch64-apple-darwin/release/kaku \
-            target/x86_64-apple-darwin/release/kaku
-          lipo -create -output target/universal/release/kaku-gui \
-            target/aarch64-apple-darwin/release/kaku-gui \
-            target/x86_64-apple-darwin/release/kaku-gui
-
-          lipo target/universal/release/kaku -verify_arch arm64 x86_64
-          lipo target/universal/release/kaku-gui -verify_arch arm64 x86_64
-
-          lipo -info target/universal/release/kaku
-          lipo -info target/universal/release/kaku-gui
-
-  app-bundle:
-    name: App Bundle Validation
-    runs-on: macos-latest
-    needs: [check, test]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-        with:
-          toolchain: 1.93.0
-
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
-      - name: Build debug app bundle
-        run: |
-          set -o pipefail
-          ./scripts/build.sh --native-arch --app-only 2>&1 | sed '/has no symbols/d'
-
-      - name: Verify bundled shell plugins are pinned
-        run: |
-          test -d dist/Kaku.app
-          test "$(cat dist/Kaku.app/Contents/Resources/vendor/zsh-autosuggestions/.kaku-vendor-ref)" = "85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5"
-          test "$(cat dist/Kaku.app/Contents/Resources/vendor/fast-syntax-highlighting/.kaku-vendor-ref)" = "3d574ccf48804b10dca52625df13da5edae7f553"
-          test "$(cat dist/Kaku.app/Contents/Resources/vendor/zsh-completions/.kaku-vendor-ref)" = "84615f3d0b0e943d5b1de862c9552e572c8e70bb"

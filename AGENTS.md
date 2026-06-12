@@ -16,7 +16,8 @@ Kaku is a macOS-native terminal emulator derived from WezTerm and shaped around 
 - `assets/` - app resources, bundled config, shell integration, and vendor assets.
 - `scripts/` - build, release, and validation helpers.
 - `docs/` - user and developer documentation.
-- `.github/workflows/ci.yml` - primary GitHub Actions workflow.
+- `.github/workflows/checks.yml` - fast correctness gates on every push (fmt, check, clippy, tests, guards).
+- `.github/workflows/build-validation.yml` - release-shaped universal/bundle builds; runs on build-pipeline changes, daily, or on dispatch. `release.sh` preflight requires its latest run green.
 - `.github/RELEASE_NOTES.md` - source for the GitHub Release title and body.
 
 ## Commands

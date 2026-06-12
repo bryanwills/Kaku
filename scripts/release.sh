@@ -115,6 +115,45 @@ check_release_config() {
     "$REPO_ROOT/scripts/check_release_config.sh"
 }
 
+# Release-shaped builds (universal binaries, bundle assembly) are validated by
+# the Build Validation workflow, which only runs on build-pipeline changes,
+# daily, or on dispatch — not on every push. Require its latest run on main to
+# be green before starting the local release ritual, so a broken x86_64 build
+# or bundle script surfaces here instead of 20 minutes into the release.
+check_build_validation() {
+    log_info "Checking latest Build Validation workflow run..."
+
+    local line
+    line=$(gh run list \
+        --workflow 'Build Validation' \
+        --branch main \
+        --limit 1 \
+        --json conclusion,url \
+        --jq '.[0] | "\(.conclusion)|\(.url)"' 2>/dev/null || true)
+
+    if [[ -z "$line" || "$line" == "null|null" ]]; then
+        log_warn "No Build Validation run found on main."
+        log_warn "Dispatch one with: gh workflow run 'Build Validation'"
+        return 0
+    fi
+
+    local conclusion="${line%%|*}"
+    local url="${line##*|}"
+
+    case "$conclusion" in
+        success)
+            log_info "Build Validation green: $url"
+            ;;
+        "" | null)
+            log_warn "Build Validation run still in progress: $url"
+            log_warn "The local release build will validate the same surface; continuing."
+            ;;
+        *)
+            die "Latest Build Validation run is '$conclusion' ($url). Fix or rerun it before releasing."
+            ;;
+    esac
+}
+
 extract_release_title() {
     local release_notes_file="$REPO_ROOT/.github/RELEASE_NOTES.md"
     local title
@@ -508,6 +547,7 @@ main() {
     if [[ "$SKIP_BUILD" -eq 0 ]]; then
         check_release_notes
         check_release_config
+        check_build_validation
         validate_release_profile
         detect_signing_identity
         check_notarization_creds
