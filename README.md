@@ -122,9 +122,9 @@ Big thanks to all contributors who helped build Kaku. Go follow them! ❤️
 
 ## Support
 
+- The most direct way to support me is getting [Mole for Mac](https://mole.fit), my paid app that deep cleans and speeds up your Mac.
 - If Kaku helped you, [share it](https://twitter.com/intent/tweet?url=https://github.com/tw93/Kaku&text=Kaku%20-%20A%20fast%20terminal%20built%20for%20AI%20coding.) with friends or give it a star.
 - Got ideas or bugs? Open an issue or PR, feel free to contribute your best AI model.
-- You can also support me by getting [Mole for Mac](https://mole.fit), my paid app that deep cleans and speeds up your Mac.
 - I have two cats, TangYuan and Coke. If you think Kaku delights your life, you can feed them <a href="https://cats.tw93.fun?name=Kaku" target="_blank">canned food 🥩</a>.
 
 <details>
