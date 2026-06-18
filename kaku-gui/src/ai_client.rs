@@ -348,7 +348,7 @@ pub struct AiClient {
 /// falls back to `scutil --proxy` on macOS so launches from the menu bar or
 /// Finder, which inherit launchd's empty environment, still go through the
 /// user's configured proxy. Without this fallback such launches silently
-/// bypass the proxy — the same hazard already fixed in the curl-based
+/// bypass the proxy, the same hazard already fixed in the curl-based
 /// update path.
 ///
 /// `timeout` controls the per-request ceiling; AI chat needs minutes for
@@ -392,9 +392,12 @@ pub(crate) fn build_client_with_proxy(timeout: std::time::Duration) -> reqwest::
 /// A user with a global SOCKS/HTTP proxy still needs to reach a self-hosted
 /// model server on loopback, their LAN, or a CGNAT/Tailscale address. The list
 /// combines hard-coded private/loopback ranges, the `NO_PROXY` environment
-/// variable, and the macOS `scutil` ExceptionsList. Returns `None` only if the
-/// joined list is unparseable, which leaves the proxy applied as before.
+/// variable, and the macOS `scutil` ExceptionsList.
 fn build_no_proxy() -> Option<reqwest::NoProxy> {
+    reqwest::NoProxy::from_string(&build_no_proxy_list().join(","))
+}
+
+fn build_no_proxy_list() -> Vec<String> {
     let mut entries: Vec<String> = [
         "localhost",
         "127.0.0.0/8",
@@ -423,7 +426,7 @@ fn build_no_proxy() -> Option<reqwest::NoProxy> {
 
     entries.extend(config::proxy::system_proxy_exceptions());
 
-    reqwest::NoProxy::from_string(&entries.join(","))
+    entries
 }
 
 /// Process-level HTTP client shared across all overlay sessions.
@@ -1318,7 +1321,7 @@ fn detect_provider_with_auth(base_url: &str, auth_type: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        detect_provider_with_auth, parse_custom_headers, reasoning_delta_text,
+        build_no_proxy_list, detect_provider_with_auth, parse_custom_headers, reasoning_delta_text,
         should_roundtrip_reasoning_content, sse_data_payload, AiClient, ApiMessage,
         AssistantConfig, InlineThinkFilter, ThinkSegment,
     };
@@ -1764,5 +1767,27 @@ mod tests {
         ];
         let (tokens, _) = route_mock_sse_lines(&lines);
         assert_eq!(tokens, "a");
+    }
+
+    #[test]
+    fn no_proxy_list_includes_private_and_local_model_hosts() {
+        let entries = build_no_proxy_list();
+        for expected in [
+            "localhost",
+            "127.0.0.0/8",
+            "::1",
+            "169.254.0.0/16",
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+            "100.64.0.0/10",
+            ".local",
+        ] {
+            assert!(
+                entries.iter().any(|entry| entry == expected),
+                "missing no-proxy entry {}",
+                expected
+            );
+        }
     }
 }
