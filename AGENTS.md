@@ -46,7 +46,7 @@ make app
 - Draft issue and PR replies unless the maintainer has already approved the exact public action.
 - Do not modify files outside this repository without showing the intended change and getting explicit confirmation.
 - Do not add instructions for the removed `website/` tree unless that directory exists in the current worktree.
-- The marketing and docs site lives on the `vercel` branch (linked worktree at `~/www/kaku-site`), not on `main`. It follows the Kami design system (`references/design.md` Section 11); verify changes with screenshots at 375px / 1280px and deploy by pushing the `vercel` branch (Vercel serves kaku.fun).
+- The marketing and docs site lives on the `vercel` branch (linked worktree at `~/www/kaku-site`), not on `main`. It follows the design guide at `~/www/kaku-site/DESIGN.md`; verify changes with screenshots at 375px / 1280px and deploy by pushing the `vercel` branch (Vercel serves kaku.fun).
 - Keep private credentials, local keychain paths, and machine-specific release notes out of public repository docs.
 - **Do not propose UI i18n / multi-language menus / a `config.language` setting.** The `rust-i18n` based Chinese UI localization (PR #362, commit `f6cfb4b`) was reverted on 2026-05-18; `language` remains in the config schema as a deprecated field for backward compat only. UI strings (`tab.empty_pane`, menus, confirm dialogs, config TUI copy) stay as English literal strings. New UI surfaces should not introduce translation keys, locale-aware formatting, or "what if a user wants Chinese" abstractions. If a user requests a non-English UI, route to the assistant config / AI chat surface; those already accept non-English content.
 - **Do not pre-bake provider abstractions in `kaku/src/ai_config/`.** The `mod provider_adapter` trait scaffolding for the 9 AI providers (KakuAssistant, ClaudeCode, Codex, Copilot, Kimi, Antigravity, Gemini, FactoryDroid, OpenClaw) was deleted on 2026-05-26 after sitting at zero implementations for half a year. When provider work is actually needed, start with a single concrete migration (one PR moves KakuAssistant's four functions from `tui.rs` to `providers/kaku_assistant.rs`); do not spec out a trait, a `ProviderKind` enum, or stub modules ahead of time. Save Copilot for last because its OAuth flow is the real abstraction stress test.
@@ -56,6 +56,7 @@ make app
 - For current issue and PR sweeps, read live GitHub state first with `gh issue list` and `gh pr list`; refresh once more before final conclusions or public actions.
 - Before commenting on or closing an item, confirm its title, state, and author with `gh issue view` or `gh pr view`.
 - Do not close issues or PRs on local green alone. For fixes pushed to `main`, wait for the new GitHub Actions run on `main` to pass before posting fixed/closed replies.
+- The rolling `nightly` release is not rebuilt by push. Before sending users to Nightly, run or verify `./scripts/nightly.sh` and confirm `gh release view nightly --json tagName,targetCommitish,publishedAt,assets,url` points at the fix commit and includes `Kaku-nightly.dmg`.
 - Before pushing `main`, run `git fetch origin main` and verify `origin/main` has not moved unexpectedly. If it moved, stop and review `origin/main..HEAD` before pushing.
 - If an accepted PR's equivalent fix lands on `main` outside the contributor branch, state the landed commit and co-author status in the PR before closing it.
 
@@ -76,11 +77,15 @@ For AI-facing behavior, inspect in this order:
 3. Overlay UI under `kaku-gui/src/overlay/ai_chat/`.
 4. Shared helpers in `crates/kaku-ai-utils/`.
 
+For AI transport bugs around custom `base_url`, keep both proxy paths true: external API hosts should use detected system proxy settings, while loopback, private LAN, link-local, CGNAT/Tailscale-style, `.local`, `NO_PROXY`, and macOS ExceptionsList model endpoints should connect directly. Verify with the macOS system proxy enabled and a loopback or internal OpenAI-compatible smoke before saying it is fixed. Do not claim general SOCKS support unless that transport is actually implemented and verified.
+
 For `Ctrl+letter` not working in a raw-mode TUI (the most common shape: `Ctrl+C` / `Ctrl+R` works in plain shell but not inside a TUI overlay), inspect in this order:
 
 1. AppKit menu `keyEquivalent` intercepting `keyDown` before the terminal sees it. Enable `config.debug_key_events = true`, restart the app, then `grep 'key_event.*CTRL' ~/.local/share/kaku/kaku-gui-log-<pid>.txt`. If the log shows only `key_is_down: false` and no matching `key_is_down: true`, the AppKit menu absorbed the event; do not chase termwiz or PTY.
 2. Cooked-mode tests (`cat -v` showing `^C`) do **not** rule out menu interception. Reproduce inside a raw-mode TUI before forming a hypothesis.
 3. Only after step 1 rules out menu interception, inspect termwiz encoding (`crates/termwiz/src/input.rs`), then PTY / termios state.
+
+For TUI display corruption after interactive CLIs re-render prompts or selection lists, first capture a minimal ANSI transcript. Add a terminal-core regression around cursor-up (`CSI n A`), full-line erase (`CSI 2K`), cursor-down (`CSI 1B`), wrapped rows, and styled prompt symbols. If the core transcript passes but the built app differs from Terminal.app, inspect GUI width, cell metrics, resize, and wrapping inputs rather than changing terminal semantics blindly.
 
 ## Subsystem Guides
 
@@ -111,7 +116,7 @@ For GUI or rendering issues, read `kaku-gui/AGENTS.md` first and verify with `ma
 ## Current Risk Areas
 
 - AI chat and shell flows are active product surfaces. Preserve `fast_model`, proxy config, inline `#` query status, syntax highlighting, approval flow, and conversation state behavior.
-- Config release work currently centers on `config_version` 23. Config schema changes must update bundled defaults, docs, release checks, and migration behavior together. v21 adds `smart_tab_mode`, retypes `tab`/`pane`/`window_close_confirmation` from bool to the `CloseConfirmation` enum (`NeverPrompt`/`SmartPrompt`/`AlwaysPrompt`, with bool still accepted for backward compat), defaults the bundled `kaku.lua` for all close-confirmation fields to `SmartPrompt`, and accepts the removed `language` option as a deprecated field for backward compat. v22 adds the dark-theme zsh comment-color guard for user-preloaded highlighting plugins. v23 flips the bundled `smart_tab_mode` default to `suggestion_first` without a schema migration; users who set `completion_first` keep it.
+- Config release work currently centers on `config_version` 24. Config schema changes must update bundled defaults, docs, release checks, and migration behavior together. v21 adds `smart_tab_mode`, introduces `SmartPrompt` for close-confirmation behavior while accepting the removed `language` option as a deprecated field for backward compat. v22 adds the dark-theme zsh comment-color guard for user-preloaded highlighting plugins. v23 flips the bundled `smart_tab_mode` default to `suggestion_first` without a schema migration; users who set `completion_first` keep it. v24 migrates yazi `$schema` keys to `#:schema` comments in setup scripts, the yazi wrapper, and `kaku.lua`.
 - GUI regressions can come from overlay resize, pane split/removal, macOS worker thread lifetime, WebGPU surface reconfigure, tab bar spacing, and alternate-screen wheel scroll behavior.
 - Startup performance depends on caching shell user vars, Lua bytecode, early appearance queries, GLSL version, and built-in fonts. Do not invalidate those caches without measurement.
 - Notification actions that call back into Kaku should resolve bundled executables relative to the running app, not an assumed system path.

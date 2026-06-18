@@ -37,10 +37,12 @@ Use this skill for maintenance work that spans GitHub issues, pull requests, loc
    - Confirm each item identity again before posting.
    - Match the opener's language when it is Chinese or English. Use English for Japanese or Korean unless the maintainer says otherwise.
    - Start with `@login`, one short thanks, the concrete fix or reason, and the next release, nightly, or verification step.
+   - Use Nightly as a test path only after verifying it was rebuilt for the fix. `nightly` is a rolling GitHub prerelease produced by `./scripts/nightly.sh`; a push to `main` alone does not refresh the DMG.
+   - For merged contributor PRs, leave at most one short thanks comment after merge or Nightly availability, and avoid duplicating bot or deployment noise.
    - Close fixed issues with `--reason completed`.
    - Close PRs without merging only when the fix is already covered on `main`, the direction is no longer needed, the patch is unsafe, the work is duplicate, or the maintainer explicitly rejects it.
    - If an accepted contributor fix lands through a maintainer commit, mention the landed commit and co-author credit in the PR comment.
 
 ## Final Report
 
-Report the pushed branch and commit, the CI run URL and conclusion, each issue/PR decision, and whether any open issues or PRs remain.
+Report the pushed branch and commit, the CI run URL and conclusion, any verified Nightly URL when used, each issue/PR decision, and whether any open issues or PRs remain.

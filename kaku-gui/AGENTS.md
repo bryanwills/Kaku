@@ -46,6 +46,7 @@
 - Pass fullscreen state into `TabBarState::new()` and preserve fullscreen-specific title button spacing behavior.
 - Keep AI overlay state changes cheap enough for live terminal interaction; avoid blocking render/input loops on provider calls.
 - Preserve approval prompts and inline AI status placement when touching AI chat or shell flows.
+- AI HTTP transport must preserve both sides of proxy behavior: external API hosts should honor detected system proxy settings, while loopback, private LAN, link-local, CGNAT/Tailscale-style, `.local`, `NO_PROXY`, and macOS ExceptionsList model endpoints should bypass the proxy and connect directly. Do not describe this as full SOCKS support unless reqwest SOCKS support is actually enabled and smoke-tested.
 - Wrap macOS worker thread spawns in the existing autorelease-pool helper so shutdown does not reintroduce use-after-free crashes.
 
 ## Known Pitfalls
