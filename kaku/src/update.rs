@@ -136,10 +136,18 @@ mod imp {
                 // Strip markdown image links and clean up for terminal display.
                 for line in body.lines() {
                     let trimmed = line.trim();
-                    if trimmed.starts_with("![") || trimmed.starts_with("<img") {
+                    // Skip markdown image links outright.
+                    if trimmed.starts_with("![") {
                         continue;
                     }
-                    println!("  {}", line);
+                    // Render any inline HTML (the release header's
+                    // <div>/<img>/<h1>/<p><em>) as plain text.
+                    let cleaned = strip_html_tags(line);
+                    // Drop lines that were pure HTML: had content, empty now.
+                    if cleaned.trim().is_empty() && !trimmed.is_empty() {
+                        continue;
+                    }
+                    println!("  {}", cleaned);
                 }
                 println!();
             }
@@ -904,6 +912,24 @@ mod imp {
         version.trim().trim_start_matches(['v', 'V']).to_string()
     }
 
+    /// Strip inline HTML tags so release notes print as plain text. The GitHub
+    /// release body mirrors RELEASE_NOTES.md, whose header wraps the logo and
+    /// title in <div>/<img>/<h1>/<p><em>; printed verbatim those tags leak into
+    /// `kaku update` output.
+    fn strip_html_tags(line: &str) -> String {
+        let mut out = String::with_capacity(line.len());
+        let mut in_tag = false;
+        for ch in line.chars() {
+            match ch {
+                '<' => in_tag = true,
+                '>' => in_tag = false,
+                _ if !in_tag => out.push(ch),
+                _ => {}
+            }
+        }
+        out
+    }
+
     fn compare_versions(left: &str, right: &str) -> Option<Ordering> {
         let left = parse_version_numbers(left)?;
         let right = parse_version_numbers(right)?;
@@ -938,7 +964,7 @@ mod imp {
 
     #[cfg(test)]
     mod tests {
-        use super::is_newer_version;
+        use super::{is_newer_version, strip_html_tags};
 
         #[test]
         fn semver_numeric_comparison() {
@@ -946,6 +972,24 @@ mod imp {
             assert!(!is_newer_version("0.2.0", "0.11.0"));
             assert!(!is_newer_version("0.1.1", "0.1.1"));
             assert!(is_newer_version("v0.1.2", "0.1.1"));
+        }
+
+        #[test]
+        fn release_notes_render_as_plain_text() {
+            // Pure-HTML header lines collapse to empty (caller drops them).
+            assert_eq!(strip_html_tags("<div align=\"center\">"), "");
+            assert_eq!(strip_html_tags("</div>"), "");
+            // Tagged content keeps only the text.
+            assert_eq!(strip_html_tags("<h1>Kaku V0.12.3</h1>"), "Kaku V0.12.3");
+            assert_eq!(
+                strip_html_tags("<p><em>A fast terminal.</em></p>"),
+                "A fast terminal."
+            );
+            // Plain markdown lines pass through untouched.
+            assert_eq!(
+                strip_html_tags("1. **System Proxy**: works"),
+                "1. **System Proxy**: works"
+            );
         }
     }
 }
