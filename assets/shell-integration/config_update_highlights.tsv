@@ -52,3 +52,5 @@
 23	Tab 现在默认接受灰色自动建议：有建议时按 Tab 直接采纳，没有时仍回退到补全；想保留旧的补全优先行为可设 smart_tab_mode = 'completion_first'
 24	Yazi launched from Kaku works again with newer Yazi versions: config files written by older Kaku are repaired automatically
 24	从 Kaku 启动 Yazi 在新版 Yazi 下恢复正常：旧版 Kaku 写入的配置文件会被自动修复
+25	Existing directory paths in the command line no longer carry a stray underline, and hovering one no longer stacks a second underline
+25	命令行里已存在的目录路径不再带一条多余的下划线，悬停时也不会再叠出第二条
