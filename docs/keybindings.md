@@ -66,6 +66,7 @@ All keybindings use macOS-native modifier keys. `Opt` = Option/Alt, `Ctrl` = Con
 | :--- | :--- |
 | Clear screen + scrollback | `Cmd + K` |
 | Open Settings panel | `Cmd + ,` (type to filter model lists inside the panel) |
+| Open Command Palette | `Cmd + Shift + P` |
 | Open AI panel | `Cmd + Shift + A` |
 | Open AI Chat | `Cmd + L` |
 | Apply Kaku Assistant suggestion | `Cmd + Shift + E` |
@@ -74,6 +75,8 @@ All keybindings use macOS-native modifier keys. `Opt` = Option/Alt, `Ctrl` = Con
 | Open yazi file manager | `Cmd + Shift + Y` |
 | Browse remote files (SSH) | `Cmd + Shift + R` |
 | Open Doctor panel | `Ctrl + Shift + L` |
+
+> The Command Palette is the quickest way to find built-in commands when you do not remember a shortcut.
 
 ## Mouse
 
