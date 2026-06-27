@@ -46,10 +46,11 @@ fn compute_repo_dir(url: &str) -> String {
 fn get_remote(repo: &Repository) -> anyhow::Result<Option<Remote<'_>>> {
     let remotes = repo.remotes()?;
     for remote in remotes.iter() {
-        if let Some(name) = remote {
-            let remote = repo.find_remote(name)?;
-            return Ok(Some(remote));
-        }
+        let Some(name) = remote.context("remote name is not utf8")? else {
+            continue;
+        };
+        let remote = repo.find_remote(name)?;
+        return Ok(Some(remote));
     }
     Ok(None)
 }
@@ -82,16 +83,12 @@ impl RepoSpec {
 
         let repo = Repository::open(&path)?;
         let remote = get_remote(&repo)?.ok_or_else(|| anyhow!("no remotes!?"))?;
-        let url = remote.url();
-        if let Some(url) = url {
-            let url = url.to_string();
-            return Ok(Self {
-                component,
-                url,
-                plugin_dir,
-            });
-        }
-        anyhow::bail!("Unable to create a complete RepoSpec for repo at {path:?}");
+        let url = remote.url().context("remote url is not utf8")?.to_string();
+        Ok(Self {
+            component,
+            url,
+            plugin_dir,
+        })
     }
 
     fn plugins_dir() -> PathBuf {
@@ -115,7 +112,7 @@ impl RepoSpec {
             .default_branch()
             .context("get default branch")?
             .as_str()
-            .ok_or_else(|| anyhow!("default branch is not utf8"))?
+            .context("default branch is not utf8")?
             .to_string();
 
         remote.fetch(&[branch], None, None).context("fetch")?;
