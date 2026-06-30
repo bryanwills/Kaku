@@ -126,6 +126,18 @@ For GUI or rendering issues, read `kaku-gui/AGENTS.md` first and verify with `ma
 
 Tag format is `V0.x.x`. `scripts/release.sh` is the source of truth for tagged releases. The GitHub Release title comes from the first heading in `.github/RELEASE_NOTES.md`.
 
+## Pre-release Runtime Smoke
+
+CI gates fmt/check/clippy/tests but cannot see visual layout, native AppKit, render timing, or shell-in-user-env behavior, which is where most post-release reports come from. Before tagging, smoke these runtime-only hotspots by hand in the built `dist/Kaku.app`:
+
+- **macOS window** (#408, #414): first-launch title-bar click must not maximize; drag the window while it fills the desktop; flip system light/dark; enter and exit fullscreen.
+- **Tab bar** (#409, #439, #443, #445): both `tab_bar_at_bottom` states; overflow a narrow window and confirm titles truncate but every tab stays clickable; rename a tab, then switch and confirm no position scramble.
+- **Render timing / stale drawable** (#452, #458): on the default WebGpu backend, sleep then wake the Mac and confirm the window repaints instead of freezing on the old frame while keystrokes still reach the shell; connect or disconnect an external display and confirm no frozen frame or geometry jump; open a new window straight into fullscreen and resize it, confirming it fills without a stale first frame.
+- **Shell setup** (#432, #441, #450): from a clean `HOME`, run `kaku init` and confirm z / syntax-highlight / autosuggestions are active in a fresh shell.
+- **AI chat** (#418, #431): run `kaku chat`, quit, then reopen it in the same window.
+
+When a release fixes a bug outside this list, add the reproduction here. The maintainer's local release runbook carries the full step-by-step.
+
 ## Documentation Maintenance
 
 - Single-crate behavior belongs in that crate's `AGENTS.md`.
