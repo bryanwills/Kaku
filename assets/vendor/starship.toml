@@ -2,7 +2,7 @@
 
 add_newline = false
 command_timeout = 10000
-format = "$directory$git_branch$python$conda$package$character"
+format = "$directory$git_branch$git_status$python$conda$package$nodejs$character"
 
 [directory]
 truncate_to_repo = true
@@ -15,11 +15,10 @@ success_symbol = " "
 error_symbol = " "
 format = "$symbol"
 
-# Git branch: shows the current branch name with a Nerd Font branch icon.
-# Modification status is intentionally omitted because the default ASCII
-# indicators (e.g. [!?], (*)) look noisy in a clean prompt. If you want
-# them back, add "$git_status" into `format` above and uncomment the
-# [git_status] block at the bottom of this file.
+# Git branch: shows the current branch name with a Nerd Font branch icon,
+# followed by the working-tree status from the [git_status] block below
+# (tasteful single-glyph markers, not the noisy default ASCII like [!?]).
+# Drop "$git_status" from `format` above to hide the status again.
 [git_branch]
 symbol = " "
 style = "bold purple"
@@ -44,27 +43,27 @@ ignore_base = false
 [package]
 format = " is [$symbol$version]($style)"
 
+# Node.js version, shown only in JS/TS projects (package.json, .nvmrc, etc.).
+[nodejs]
+format = ' via [$symbol$version]($style)'
+style = 'bold green'
+
 # Avoid prompt width issues caused by emoji variation selectors (e.g. ☁️)
 # in some shell/font/wcwidth combinations.
 [aws]
 disabled = true
 
-# Optional: pretty git status indicators. To enable, add "$git_status" to
-# `format` at the top of this file (e.g. "$directory$git_branch$git_status…")
-# and remove the leading "#" from each line below.
-#
-# Symbols use single-character Nerd Font glyphs grouped together with no
-# brackets, and counts only appear when greater than one. Result looks like:
+# Git status indicators: single-character Nerd Font glyphs grouped together
+# with no brackets; counts only show when greater than one. Looks like:
 #   main  ↑2  ?3
-#
-# [git_status]
-# format = ' [$ahead_behind$conflicted$staged$modified$untracked$stashed]($style)'
-# style = "bold yellow"
-# ahead = " ↑${count}"
-# behind = " ↓${count}"
-# diverged = " ⇕"
-# conflicted = "  "
-# staged = "  "
-# modified = "  "
-# untracked = " ?${count}"
-# stashed = "  "
+[git_status]
+format = ' [$ahead_behind$conflicted$staged$modified$untracked$stashed]($style)'
+style = "bold yellow"
+ahead = " ↑${count}"
+behind = " ↓${count}"
+diverged = " ⇕"
+conflicted = "  "
+staged = "  "
+modified = "  "
+untracked = " ?${count}"
+stashed = "  "
