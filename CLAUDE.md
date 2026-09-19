@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # Kaku
 
 Kaku is a macOS-native terminal emulator derived from WezTerm and tuned for AI-assisted terminal work.
