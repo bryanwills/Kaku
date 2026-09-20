@@ -1174,6 +1174,7 @@ local tab = {{
 }}
 local effective_config = {{
   bell_tab_indicator = true,
+  show_tab_index_in_tab_bar = true,
   resolved_palette = {{
     tab_bar = {{
       background = '#15141b',
@@ -1226,6 +1227,26 @@ return tab, {{ tab }}, panes, effective_config
                     max_width,
                     text
                 );
+                // Regression: the multi-pane branch ignored
+                // show_tab_index_in_tab_bar, so split tabs lost the index the
+                // single-pane branch and the Rust fallback both draw.
+                if pane_count > 1 {
+                    if max_width >= 4 {
+                        assert!(
+                            text.starts_with(" 1:"),
+                            "multi-pane title should keep the tab index in a {}-column budget: {:?}",
+                            max_width,
+                            text
+                        );
+                    } else {
+                        assert!(
+                            !text.contains("1:"),
+                            "a {}-column multi-pane title cannot afford the tab index: {:?}",
+                            max_width,
+                            text
+                        );
+                    }
+                }
                 assert_eq!(
                     last_text.as_deref(),
                     Some(" "),

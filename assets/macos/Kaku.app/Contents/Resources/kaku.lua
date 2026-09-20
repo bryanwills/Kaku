@@ -3266,8 +3266,8 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, effective_config, hove
 
     -- Fit segments into the tab's width budget; anything wider is
     -- hard-clipped mid-segment by the renderer, taking the trailing
-    -- bell slot with it. Reserve the leading space, the trailing
-    -- slot, and the rendered separator width between segments.
+    -- bell slot with it. Reserve the leading space, the tab index, the
+    -- trailing slot, and the rendered separator width between segments.
     local function segments_width(segs)
       local w = (#segs - 1) * sep_width
       for _, seg in ipairs(segs) do
@@ -3278,7 +3278,22 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, effective_config, hove
 
     local total_limit = math.max(1, max_width or 32)
     local leading = total_limit >= 2 and ' ' or ''
-    local budget = math.max(0, total_limit - wezterm.column_width(leading) - 1)
+    local title_limit = math.max(0, total_limit - wezterm.column_width(leading) - 1)
+
+    -- This branch draws the tab index as well, and the index is charged
+    -- against the same title budget the single-pane path truncates to.
+    -- Drop it instead of clipping it when the tab is too narrow to afford
+    -- it, so the segments are never laid out as if it were free.
+    local index_prefix = ''
+    if effective_config.show_tab_index_in_tab_bar then
+      local tab_index = effective_config.tab_and_split_indices_are_zero_based and tab.tab_index or (tab.tab_index + 1)
+      local index = tab_index .. ':'
+      if wezterm.column_width(index) <= title_limit then
+        index_prefix = index
+      end
+    end
+
+    local budget = math.max(0, title_limit - wezterm.column_width(index_prefix))
     local segments = dedupe_segments('full')
     if segments_width(segments) > budget then
       -- Degrade to basename-only segments before cutting anything
@@ -3342,8 +3357,10 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, effective_config, hove
 
     -- Build FormatItem sequence
     local items = {}
-    if leading ~= '' then
-      items[#items + 1] = { Text = leading }
+    if leading ~= '' or index_prefix ~= '' then
+      items[#items + 1] = { Attribute = { Intensity = tab.is_active and 'Bold' or 'Normal' } }
+      items[#items + 1] = { Foreground = { Color = fg_active } }
+      items[#items + 1] = { Text = leading .. index_prefix }
     end
     for i, seg in ipairs(segments) do
       if seg.active then
