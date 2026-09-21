@@ -1147,7 +1147,23 @@ mod tests {
                 .eval_async::<mlua::Value>(),
         )?;
 
-        for pane_count in [1, 4] {
+        // (pane_count, tab_index, show_index, same_dir)
+        for (pane_count, tab_index, show_index, same_dir) in [
+            (1, 0, false, false),
+            (1, 0, true, false),
+            (4, 0, true, false),
+            (4, 9, true, false),
+            // every pane in one directory: the segments merge into a single one,
+            // which is the shape a split tab takes when it loses its number
+            (3, 1, true, true),
+        ] {
+            // A split tab whose panes all sit in one directory merges into one
+            // segment, so the fixture gets a single shared cwd as well.
+            let pane_cwd = if same_dir {
+                "'file:///Users/test/apps/psygo'".to_string()
+            } else {
+                "('file:///Users/test/projects/repository-' .. i)".to_string()
+            };
             let fixture = format!(
                 r#"
 local panes = {{}}
@@ -1158,13 +1174,13 @@ for i = 1, {pane_count} do
     is_active = i == {pane_count},
     is_zoomed = false,
     title = 'pane-' .. i,
-    current_working_dir = 'file:///Users/test/projects/repository-' .. i,
+    current_working_dir = {pane_cwd},
     user_vars = {{}},
   }}
 end
 local tab = {{
   tab_id = 1,
-  tab_index = 0,
+  tab_index = {tab_index},
   is_active = false,
   active_pane = panes[{pane_count}],
   panes = panes,
@@ -1174,6 +1190,7 @@ local tab = {{
 }}
 local effective_config = {{
   bell_tab_indicator = true,
+  show_tab_index_in_tab_bar = {show_index},
   resolved_palette = {{
     tab_bar = {{
       background = '#15141b',
@@ -1189,7 +1206,8 @@ return tab, {{ tab }}, panes, effective_config
             let (tab, tabs, panes, config): (mlua::Table, mlua::Table, mlua::Table, mlua::Table) =
                 lua.load(&fixture).eval()?;
 
-            for max_width in 1..=12 {
+            // 16 columns leaves room for the merged "apps/psygo" segment.
+            for max_width in 1..=16 {
                 let value = crate::lua::emit_sync_callback(
                     &lua,
                     (
@@ -1226,6 +1244,53 @@ return tab, {{ tab }}, panes, effective_config
                     max_width,
                     text
                 );
+                // Regression: the multi-pane branch ignored
+                // show_tab_index_in_tab_bar, so split tabs lost the index the
+                // single-pane branch and the Rust fallback both draw.
+                let index = format!("{}:", tab_index + 1);
+                if !show_index {
+                    assert!(
+                        !text.contains(&index),
+                        "show_tab_index_in_tab_bar = false must not draw {:?}: {:?}",
+                        index,
+                        text
+                    );
+                } else if pane_count == 1 {
+                    // The single-pane path truncates one text run, so the first digit
+                    // of the index survives as soon as the budget fits the leading cell.
+                    if max_width >= 4 {
+                        assert!(
+                            text.starts_with(&format!(" {}", &index[..1])),
+                            "single-pane title should keep the tab index in a {}-column budget: {:?}",
+                            max_width,
+                            text
+                        );
+                    }
+                } else if max_width >= index.len() + 2 {
+                    // Leading space + index + the trailing status cell.
+                    assert!(
+                        text.starts_with(&format!(" {index}")),
+                        "multi-pane title should keep the tab index in a {}-column budget: {:?}",
+                        max_width,
+                        text
+                    );
+                    if max_width == index.len() + 2 {
+                        // The index and the status cell are all that budget affords,
+                        // so the segments are dropped whole rather than clipped.
+                        assert_eq!(text, format!(" {index} "));
+                    } else if same_dir && max_width >= index.len() + "apps/psygo".len() + 2 {
+                        // Leading cell + index + the merged segment + the status cell.
+                        assert_eq!(text, format!(" {index}apps/psygo "));
+                    }
+                } else {
+                    assert!(
+                        !text.contains(&index),
+                        "a {}-column multi-pane title cannot afford {:?}: {:?}",
+                        max_width,
+                        index,
+                        text
+                    );
+                }
                 assert_eq!(
                     last_text.as_deref(),
                     Some(" "),
