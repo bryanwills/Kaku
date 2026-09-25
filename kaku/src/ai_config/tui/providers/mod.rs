@@ -7,6 +7,7 @@
 //! behavior, strings, or control flow were changed during extraction.
 
 pub(super) mod assistant;
+pub(super) mod codex;
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
@@ -20,11 +21,12 @@ use crate::assistant_config;
 use crate::utils::write_atomic;
 
 use super::{
-    assistant_model_options_for_config_remote, codex_home_dir, decode_jwt_payload_with_debug,
-    extract_antigravity_fields, kimi_credentials_path, read_codex_model_options,
-    read_json_file_with_debug, FieldEntry, Tool, FOLLOW_CODEX_MODEL,
+    assistant_model_options_for_config_remote, decode_jwt_payload_with_debug,
+    extract_antigravity_fields, kimi_credentials_path, read_json_file_with_debug, FieldEntry, Tool,
+    FOLLOW_CODEX_MODEL,
 };
 use assistant::{extract_kaku_assistant_fields_with_model_options, parse_kaku_assistant_config};
+use codex::{codex_home_dir, read_codex_model_options};
 
 const USAGE_CACHE_TTL: Duration = Duration::from_secs(120);
 const CLAUDE_OAUTH_CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
