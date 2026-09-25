@@ -8,7 +8,8 @@ use ::window::{
     WindowState,
 };
 use config::keyassignment::{
-    ClipboardPasteSource, KeyAssignment, MouseEventTrigger, Pattern, SpawnTabDomain,
+    ClipboardCopyDestination, ClipboardPasteSource, KeyAssignment, MouseEventTrigger, Pattern,
+    SpawnTabDomain,
 };
 use config::{MouseEventAltScreen, SelectionWheelScrollBehavior};
 use mux::pane::{CachePolicy, Pane, WithPaneLines};
@@ -49,7 +50,7 @@ fn should_show_terminal_context_menu(
         && (!mouse_grabbed || modifiers.contains(bypass_modifiers))
 }
 
-fn terminal_context_menu_actions() -> Vec<(&'static str, KeyAssignment)> {
+fn terminal_context_menu_actions(has_selection: bool) -> Vec<(&'static str, KeyAssignment)> {
     let split = |direction| {
         KeyAssignment::SplitPane(config::keyassignment::SplitPane {
             direction,
@@ -59,7 +60,16 @@ fn terminal_context_menu_actions() -> Vec<(&'static str, KeyAssignment)> {
         })
     };
 
-    vec![
+    let mut actions = Vec::new();
+    // Copy is offered only with a live selection, so users who turn off
+    // copy_on_select still have a mouse path to the clipboard (#558).
+    if has_selection {
+        actions.push((
+            "Copy",
+            KeyAssignment::CopyTo(ClipboardCopyDestination::Clipboard),
+        ));
+    }
+    actions.extend([
         (
             "Paste",
             KeyAssignment::PasteFrom(ClipboardPasteSource::Clipboard),
@@ -87,7 +97,8 @@ fn terminal_context_menu_actions() -> Vec<(&'static str, KeyAssignment)> {
             "Close Pane",
             KeyAssignment::CloseCurrentPane { confirm: true },
         ),
-    ]
+    ]);
+    actions
 }
 
 /// Per-window state describing in-flight window-level drag interactions
@@ -2054,9 +2065,11 @@ impl super::TermWindow {
                         .and_then(|tab| tab.get_active_pane())
                         .map(|pane| pane.pane_id().as_usize());
                     if let Some(pane_id) = target_pane_id {
+                        let has_selection =
+                            !self.selection(mux::pane::PaneId::new(pane_id)).is_empty();
                         let menu = Menu::new_with_title("");
                         let selector = sel!(kakuPerformKeyAssignment:);
-                        for (title, action) in terminal_context_menu_actions() {
+                        for (title, action) in terminal_context_menu_actions(has_selection) {
                             // Context-menu items deliberately have no AppKit keyEquivalent.
                             // Kaku's configurable InputMap remains the shortcut source of truth.
                             let item = MenuItem::new_with(title, Some(selector), "");
@@ -2201,7 +2214,7 @@ mod tests {
     };
     use crate::tabbar::TabBarItem;
     use crate::termwindow::MouseCapture;
-    use config::keyassignment::KeyAssignment;
+    use config::keyassignment::{ClipboardCopyDestination, KeyAssignment};
     use config::SelectionWheelScrollBehavior;
     use mux::pane::PaneId;
     use window::{
@@ -2644,8 +2657,18 @@ mod tests {
     }
 
     #[test]
+    fn context_menu_offers_copy_only_with_selection() {
+        let copy = KeyAssignment::CopyTo(ClipboardCopyDestination::Clipboard);
+        let with_selection = terminal_context_menu_actions(true);
+        assert_eq!(with_selection.first(), Some(&("Copy", copy.clone())));
+        assert!(!terminal_context_menu_actions(false)
+            .iter()
+            .any(|(_, action)| *action == copy));
+    }
+
+    #[test]
     fn context_menu_close_uses_confirmation_policy() {
-        let close = terminal_context_menu_actions()
+        let close = terminal_context_menu_actions(false)
             .into_iter()
             .find(|(title, _)| *title == "Close Pane")
             .map(|(_, action)| action);
