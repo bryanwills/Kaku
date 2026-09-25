@@ -11,8 +11,9 @@ use promise::spawn::spawn;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use wezterm_term::TerminalSize;
 use wezterm_toast_notification::persistent_toast_notification;
 use window::WindowOps;
@@ -598,6 +599,16 @@ static MUX_DIRTY: AtomicBool = AtomicBool::new(false);
 /// favor of a "trivial" live session: trivial then means the user closed
 /// the restored tabs on purpose.
 static SNAPSHOT_CONSUMED: AtomicBool = AtomicBool::new(false);
+/// Set when startup looked for a snapshot and found none. Together with
+/// SNAPSHOT_CONSUMED it marks the process that owns the session file, the
+/// only one allowed to refresh it while running.
+static STARTUP_FOUND_NO_SNAPSHOT: AtomicBool = AtomicBool::new(false);
+/// Bumped on every window, tab or pane change so the periodic save only
+/// rewrites the snapshot after something actually changed.
+static SESSION_GENERATION: AtomicU64 = AtomicU64::new(0);
+/// Release builds abort on panic and a force quit skips the exit path, so the
+/// snapshot is refreshed while running instead of only at a clean exit.
+const PERIODIC_SNAPSHOT_INTERVAL: Duration = Duration::from_secs(60);
 /// Set when startup restored only part of the saved session. The original
 /// snapshot and its scrollback sidecars remain the only complete copy, so
 /// this process must not replace or delete them on exit.
@@ -612,6 +623,7 @@ pub fn mark_dirty() {
     if RESTORING_DEPTH.load(Ordering::Acquire) > 0 {
         return;
     }
+    SESSION_GENERATION.fetch_add(1, Ordering::AcqRel);
     MUX_DIRTY.store(true, Ordering::Release);
 }
 
@@ -621,10 +633,13 @@ fn is_dirty() -> bool {
 
 pub fn mark_window_logically_closed(window_id: MuxWindowId) {
     logically_closed().lock().insert(window_id);
+    SESSION_GENERATION.fetch_add(1, Ordering::AcqRel);
 }
 
 pub fn forget_logically_closed(window_id: MuxWindowId) {
-    logically_closed().lock().remove(&window_id);
+    if logically_closed().lock().remove(&window_id) {
+        SESSION_GENERATION.fetch_add(1, Ordering::AcqRel);
+    }
 }
 
 fn is_window_logically_closed(window_id: MuxWindowId) -> bool {
@@ -659,6 +674,49 @@ fn record_startup_restore_outcome(outcome: SessionRestoreOutcome) {
 
 fn should_preserve_existing_session_snapshot() -> bool {
     SNAPSHOT_RESTORE_INCOMPLETE.load(Ordering::Acquire)
+}
+
+/// A secondary instance (one command, `--always-new-process`) never ran the
+/// startup restore, so it must not race the owner by rewriting the file.
+fn owns_session_file(snapshot_consumed: bool, startup_found_no_snapshot: bool) -> bool {
+    snapshot_consumed || startup_found_no_snapshot
+}
+
+fn periodic_save_due(owner: bool, current_generation: u64, saved_generation: u64) -> bool {
+    owner && current_generation != saved_generation
+}
+
+/// Refresh the session snapshot while running, at most once per interval and
+/// only after a window, tab or pane change. The exit save stays the final word.
+pub fn start_periodic_session_snapshot() {
+    spawn(async move {
+        let mut saved_generation = SESSION_GENERATION.load(Ordering::Acquire);
+        loop {
+            smol::Timer::after(PERIODIC_SNAPSHOT_INTERVAL).await;
+            if !config::configuration().restore_previous_session {
+                continue;
+            }
+            let owner = owns_session_file(
+                SNAPSHOT_CONSUMED.load(Ordering::Acquire),
+                STARTUP_FOUND_NO_SNAPSHOT.load(Ordering::Acquire),
+            );
+            let generation = SESSION_GENERATION.load(Ordering::Acquire);
+            if RESTORING_DEPTH.load(Ordering::Acquire) > 0
+                || !periodic_save_due(owner, generation, saved_generation)
+            {
+                continue;
+            }
+            let started = std::time::Instant::now();
+            match save_session_snapshot() {
+                Ok(()) => {
+                    saved_generation = generation;
+                    log::debug!("periodic session snapshot saved in {:?}", started.elapsed());
+                }
+                Err(err) => log::warn!("periodic session snapshot failed: {err:#}"),
+            }
+        }
+    })
+    .detach();
 }
 
 struct RestoringGuard;
@@ -1394,13 +1452,29 @@ pub async fn try_restore_on_startup() -> anyhow::Result<bool> {
             }
             Ok(outcome.restored_any())
         }
-        None => Ok(false),
+        None => {
+            STARTUP_FOUND_NO_SNAPSHOT.store(true, Ordering::Release);
+            Ok(false)
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_session_owner_refreshes_the_snapshot_while_running() {
+        // Restored this snapshot, or started with none: this process owns it.
+        assert!(owns_session_file(true, false));
+        assert!(owns_session_file(false, true));
+        // Secondary instance, or a partial restore that must keep the file.
+        assert!(!owns_session_file(false, false));
+
+        assert!(periodic_save_due(true, 3, 2));
+        assert!(!periodic_save_due(true, 3, 3));
+        assert!(!periodic_save_due(false, 3, 2));
+    }
 
     fn serde_url(s: &str) -> SerdeUrl {
         SerdeUrl {

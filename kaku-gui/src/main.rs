@@ -477,6 +477,7 @@ async fn async_run_terminal_gui(
         let config = config::configuration();
         if config.restore_previous_session {
             startup_trace::mark("  auto-restore session start");
+            session_restore::start_periodic_session_snapshot();
             match session_restore::try_restore_on_startup().await {
                 Ok(true) => {
                     log::info!("auto-restored previous session from snapshot");
