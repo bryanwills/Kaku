@@ -4533,6 +4533,63 @@ provider = "managed:kimi-code"
         assert!(saved.contains("base_url = \"https://my-proxy.example.com/v1\""));
     }
 
+    /// The GUI reads what `kaku ai` writes; both sides assert this fixture.
+    /// The CLI half also re-reads its own rendered file, so a rewrite through
+    /// the TUI must not drop anything the GUI depends on.
+    #[test]
+    fn kaku_assistant_config_matches_shared_gui_contract() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../tests/fixtures/assistant-config.json"
+        )))
+        .expect("shared assistant config fixtures");
+        for case in cases.as_array().unwrap() {
+            let name = case["name"].as_str().unwrap();
+            let parsed = parse_kaku_assistant_config(case["toml"].as_str().unwrap());
+            let rewritten = parse_kaku_assistant_config(&render_kaku_assistant_config(&parsed));
+            for (stage, cfg) in [("parse", &parsed), ("rewrite", &rewritten)] {
+                let ctx = format!("{} ({})", name, stage);
+                assert_eq!(
+                    cfg.model(),
+                    case["simple_model"].as_str().unwrap(),
+                    "{}",
+                    ctx
+                );
+                assert_eq!(
+                    cfg.deep_model(),
+                    case["deep_model"].as_str().unwrap(),
+                    "{}",
+                    ctx
+                );
+                assert_eq!(
+                    cfg.base_url().trim_end_matches('/'),
+                    case["base_url"].as_str().unwrap(),
+                    "{}",
+                    ctx
+                );
+                assert_eq!(
+                    cfg.api_mode(),
+                    case["api_mode"].as_str().unwrap(),
+                    "{}",
+                    ctx
+                );
+                assert_eq!(
+                    cfg.auth_type(),
+                    case["auth_type"].as_str().unwrap(),
+                    "{}",
+                    ctx
+                );
+                let choices: Vec<&str> = case["chat_model_choices"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_str().unwrap())
+                    .collect();
+                assert_eq!(cfg.chat_model_choices(), choices.as_slice(), "{}", ctx);
+            }
+        }
+    }
+
     #[test]
     fn kaku_assistant_save_auth_type_codex_round_trip() {
         let dir = tempdir().expect("tempdir");

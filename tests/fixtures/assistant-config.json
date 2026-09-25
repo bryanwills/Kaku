@@ -1,0 +1,82 @@
+[
+  {
+    "name": "simple model only",
+    "toml": "model = \"gpt-5-mini\"\nbase_url = \"https://api.openai.com/v1\"",
+    "simple_model": "gpt-5-mini",
+    "deep_model": "gpt-5-mini",
+    "base_url": "https://api.openai.com/v1",
+    "api_mode": "chat_completions",
+    "auth_type": "api_key",
+    "chat_model_choices": []
+  },
+  {
+    "name": "separate deep model",
+    "toml": "model = \"gpt-5-mini\"\nchat_model = \"gpt-5\"\nbase_url = \"https://api.openai.com/v1\"",
+    "simple_model": "gpt-5-mini",
+    "deep_model": "gpt-5",
+    "base_url": "https://api.openai.com/v1",
+    "api_mode": "chat_completions",
+    "auth_type": "api_key",
+    "chat_model_choices": []
+  },
+  {
+    "name": "legacy fast_model folds into simple and keeps model as deep",
+    "toml": "model = \"big-model\"\nfast_model = \"small-model\"\nbase_url = \"https://example.com/v1\"",
+    "simple_model": "small-model",
+    "deep_model": "big-model",
+    "base_url": "https://example.com/v1",
+    "api_mode": "chat_completions",
+    "auth_type": "api_key",
+    "chat_model_choices": []
+  },
+  {
+    "name": "legacy fast_model equal to model",
+    "toml": "model = \"same-model\"\nfast_model = \"same-model\"\nbase_url = \"https://example.com/v1\"",
+    "simple_model": "same-model",
+    "deep_model": "same-model",
+    "base_url": "https://example.com/v1",
+    "api_mode": "chat_completions",
+    "auth_type": "api_key",
+    "chat_model_choices": []
+  },
+  {
+    "name": "responses mode",
+    "toml": "model = \"gpt-5\"\nbase_url = \"https://api.openai.com/v1\"\napi_mode = \"responses\"\nnative_web_search = true",
+    "simple_model": "gpt-5",
+    "deep_model": "gpt-5",
+    "base_url": "https://api.openai.com/v1",
+    "api_mode": "responses",
+    "auth_type": "api_key",
+    "chat_model_choices": []
+  },
+  {
+    "name": "unknown api_mode degrades to chat completions",
+    "toml": "model = \"gpt-5\"\nbase_url = \"https://api.openai.com/v1\"\napi_mode = \"respones\"",
+    "simple_model": "gpt-5",
+    "deep_model": "gpt-5",
+    "base_url": "https://api.openai.com/v1",
+    "api_mode": "chat_completions",
+    "auth_type": "api_key",
+    "chat_model_choices": []
+  },
+  {
+    "name": "deep model picker choices",
+    "toml": "model = \"fast\"\nchat_model = \"deep-a\"\nchat_model_choices = [\"deep-a\", \"deep-b\"]\nbase_url = \"http://127.0.0.1:1234/v1\"",
+    "simple_model": "fast",
+    "deep_model": "deep-a",
+    "base_url": "http://127.0.0.1:1234/v1",
+    "api_mode": "chat_completions",
+    "auth_type": "api_key",
+    "chat_model_choices": ["deep-a", "deep-b"]
+  },
+  {
+    "name": "copilot auth type",
+    "toml": "model = \"gpt-4.1\"\nbase_url = \"https://api.githubcopilot.com\"\nauth_type = \"copilot\"",
+    "simple_model": "gpt-4.1",
+    "deep_model": "gpt-4.1",
+    "base_url": "https://api.githubcopilot.com",
+    "api_mode": "chat_completions",
+    "auth_type": "copilot",
+    "chat_model_choices": []
+  }
+]
