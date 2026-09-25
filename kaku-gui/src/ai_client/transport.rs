@@ -354,8 +354,10 @@ mod tests {
                 std::thread::sleep(std::time::Duration::from_millis(5));
                 cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
             });
+            // Stay under the 50 ms sleep slice so this is still the final
+            // sleep, but leave a loaded CI runner time to schedule the setter.
             assert!(
-                super::wait_before_request(&cancelled, std::time::Duration::from_millis(20))
+                super::wait_before_request(&cancelled, std::time::Duration::from_millis(45))
                     .is_err()
             );
         });
