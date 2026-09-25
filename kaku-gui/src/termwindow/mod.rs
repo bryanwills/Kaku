@@ -21,12 +21,13 @@ use crate::termwindow::background::{
 };
 use crate::termwindow::keyevent::{KeyTableArgs, KeyTableState, KeyboardInputState};
 use crate::termwindow::modal::Modal;
-use crate::termwindow::mouseevent::WindowDragState;
+use crate::termwindow::mouseevent::{MouseInputState, WindowDragState};
 use crate::termwindow::render::paint::AllowImage;
 use crate::termwindow::render::{
     CachedLineState, LineQuadCacheKey, LineQuadCacheValue, LineToEleShapeCacheKey,
     LineToElementShapeItem,
 };
+use crate::termwindow::resize::ResizeLifecycleState;
 use crate::termwindow::webgpu::WebGpuState;
 use ::wezterm_term::input::{ClickPosition, MouseButton as TMB};
 use ::window::*;
@@ -57,7 +58,7 @@ use mux_lua::MuxPane;
 use smol::channel::Sender;
 use smol::Timer;
 use std::cell::{RefCell, RefMut};
-use std::collections::{HashMap, LinkedList};
+use std::collections::HashMap;
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -71,7 +72,6 @@ use wezterm_dynamic::Value;
 use wezterm_font::units::PixelLength;
 use wezterm_font::FontConfiguration;
 use wezterm_term::color::ColorPalette;
-use wezterm_term::input::LastMouseClick;
 use wezterm_term::{Alert, Progress, StableRowIndex, TerminalConfiguration, TerminalSize};
 use wezterm_toast_notification::ToastNotification;
 
@@ -989,9 +989,9 @@ pub struct TermWindow {
     /// Window dimensions and dpi
     pub dimensions: Dimensions,
     pub window_state: WindowState,
-    pub resizes_pending: usize,
-    is_repaint_pending: bool,
-    pending_scale_changes: LinkedList<resize::ScaleChange>,
+    /// In-flight inner-size requests and work deferred until resizes settle.
+    /// See `ResizeLifecycleState` in `resize.rs`.
+    resize_state: ResizeLifecycleState,
     /// Terminal dimensions
     terminal_size: TerminalSize,
     pub mux_window_id: MuxWindowId,
@@ -1008,12 +1008,12 @@ pub struct TermWindow {
     fancy_tab_bar: Option<box_model::ComputedElement>,
     pub right_status: String,
     pub left_status: String,
-    last_ui_item: Option<UIItem>,
-    last_mouse_coords: (usize, i64),
     /// All window-level drag / focus suppression flags (manual title-bar
     /// drag, OS edge-resize, click-to-focus). See `WindowDragState`.
     window_drag: WindowDragState,
-    current_mouse_event: Option<MouseEvent>,
+    /// Pointer position, held buttons, capture, click counting and UI hover.
+    /// See `MouseInputState` in `mouseevent.rs`.
+    mouse: MouseInputState,
     prev_cursor: PrevCursorPos,
     /// Scrollbar UI state (last-snapshot, hover, fade-out timer).
     /// Bundled to keep the `TermWindow` field list shorter.
@@ -1027,20 +1027,8 @@ pub struct TermWindow {
     window_background: Vec<LoadedBackgroundLayer>,
 
     current_modifier_and_leds: (Modifiers, KeyboardLedStatus),
-    current_mouse_buttons: Vec<MousePress>,
-    current_mouse_capture: Option<MouseCapture>,
-    /// True while the held left button is driving a terminal text selection,
-    /// i.e. the press/drag actually resolved to a SelectTextAtMouseCursor or
-    /// ExtendSelectionToMouseCursor assignment. A left press forwarded to a
-    /// mouse-reporting application (claude code, vim, tmux with mouse on)
-    /// leaves this false so wheel events are not hijacked into
-    /// selection-extension (#455).
-    selection_drag_active: bool,
 
     opengl_info: Option<String>,
-
-    /// Keeps track of double and triple clicks
-    last_mouse_click: Option<LastMouseClick>,
 
     /// The URL over which we are currently hovering
     current_highlight: Option<Arc<Hyperlink>>,
@@ -1103,21 +1091,14 @@ pub struct TermWindow {
 
     connection_name: String,
 
-    /// Tracks whether we are currently in a live resize operation
-    live_resizing: bool,
-    pending_screen_change_resize: bool,
-    pending_pty_flush_after_resize: bool,
-
     /// The active GPU rendering backend. Exactly one variant is alive for
     /// the lifetime of the window; `None` only while the window is still
     /// initializing. Lifts the previous `gl: Option<_> + webgpu: Option<_>`
     /// pair into the type system so "both Some" is no longer representable.
     render_backend: Option<RenderBackend>,
     config_subscription: Option<config::ConfigSubscription>,
-    pending_config_reload_after_resize: bool,
     silent_reload_queued: bool,
     last_handled_appearance: Option<Appearance>,
-    deferred_layout_relayout_epoch: usize,
     layout_sticky_fullscreen_until: Option<Instant>,
     closed_tab_history: std::collections::VecDeque<PathBuf>,
 
@@ -1288,10 +1269,10 @@ impl TermWindow {
         }
 
         if self.focused.is_none() {
-            self.last_mouse_click = None;
-            self.current_mouse_buttons.clear();
-            self.current_mouse_capture = None;
-            self.selection_drag_active = false;
+            self.mouse.last_mouse_click = None;
+            self.mouse.current_mouse_buttons.clear();
+            self.mouse.current_mouse_capture = None;
+            self.mouse.selection_drag_active = false;
             self.window_drag.is_click_to_focus = false;
 
             for state in self.pane_state.borrow_mut().values_mut() {
@@ -1471,15 +1452,18 @@ impl TermWindow {
             } else {
                 16
             };
-        self.deferred_layout_relayout_epoch = self.deferred_layout_relayout_epoch.wrapping_add(1);
-        let epoch = self.deferred_layout_relayout_epoch;
+        self.resize_state.deferred_layout_relayout_epoch = self
+            .resize_state
+            .deferred_layout_relayout_epoch
+            .wrapping_add(1);
+        let epoch = self.resize_state.deferred_layout_relayout_epoch;
 
         let window = window.clone();
         promise::spawn::spawn_into_main_thread(async move {
             // Defer one frame so macOS can settle fullscreen/Space visibility state.
             Timer::after(Duration::from_millis(delay_ms)).await;
             window.notify(TermWindowNotif::Apply(Box::new(move |tw| {
-                if tw.deferred_layout_relayout_epoch != epoch {
+                if tw.resize_state.deferred_layout_relayout_epoch != epoch {
                     return;
                 }
                 if let Some(owned_window) = tw.window.as_ref().cloned() {
@@ -1667,10 +1651,8 @@ impl TermWindow {
             last_frame_duration: Duration::ZERO,
             fps: 0.,
             config_subscription: None,
-            pending_config_reload_after_resize: false,
             silent_reload_queued: false,
             last_handled_appearance: None,
-            deferred_layout_relayout_epoch: 0,
             layout_sticky_fullscreen_until: None,
             closed_tab_history: std::collections::VecDeque::new(),
             os_parameters: None,
@@ -1688,9 +1670,7 @@ impl TermWindow {
             render_metrics,
             dimensions,
             window_state: WindowState::default(),
-            resizes_pending: 0,
-            is_repaint_pending: false,
-            pending_scale_changes: LinkedList::new(),
+            resize_state: ResizeLifecycleState::default(),
             terminal_size,
             render_state,
             keyboard: KeyboardInputState::new(InputMap::new(&config)),
@@ -1700,9 +1680,8 @@ impl TermWindow {
             fancy_tab_bar: None,
             right_status: String::new(),
             left_status: String::new(),
-            last_mouse_coords: (0, -1),
             window_drag: WindowDragState::default(),
-            current_mouse_event: None,
+            mouse: MouseInputState::default(),
             current_modifier_and_leds: Default::default(),
             prev_cursor: PrevCursorPos::new(),
             scrollbar: ScrollbarState::default(),
@@ -1710,10 +1689,6 @@ impl TermWindow {
             line_editor_selection_owner: None,
             tab_state: RefCell::new(HashMap::new()),
             pane_state: RefCell::new(HashMap::new()),
-            current_mouse_buttons: vec![],
-            current_mouse_capture: None,
-            selection_drag_active: false,
-            last_mouse_click: None,
             current_highlight: None,
             quad_generation: 0,
             shape_generation: 0,
@@ -1785,7 +1760,6 @@ impl TermWindow {
             split_drag_state: None,
             tab_drag_state: None,
             tab_position_animations: HashMap::new(),
-            last_ui_item: None,
             modal: RefCell::new(None),
             opengl_info: None,
             toast: None,
@@ -1793,9 +1767,6 @@ impl TermWindow {
             selection_copy_disabled_hint_shown: false,
             last_window_title: String::new(),
             ai_chat_overlay_panes: HashMap::new(),
-            live_resizing: false,
-            pending_screen_change_resize: false,
-            pending_pty_flush_after_resize: false,
         };
 
         let tw = Rc::new(RefCell::new(myself));
@@ -2069,9 +2040,9 @@ impl TermWindow {
                 Ok(true)
             }
             WindowEvent::SetInnerSizeCompleted => {
-                self.resizes_pending -= 1;
-                if self.is_repaint_pending {
-                    self.is_repaint_pending = false;
+                self.resize_state.resizes_pending -= 1;
+                if self.resize_state.is_repaint_pending {
+                    self.resize_state.is_repaint_pending = false;
                     if self.webgpu().is_some() {
                         self.do_paint_webgpu()?;
                     } else {
@@ -2109,8 +2080,8 @@ impl TermWindow {
                 Ok(true)
             }
             WindowEvent::NeedRepaint => {
-                if self.resizes_pending > 0 {
-                    self.is_repaint_pending = true;
+                if self.resize_state.resizes_pending > 0 {
+                    self.resize_state.is_repaint_pending = true;
                     Ok(true)
                 } else if self.webgpu().is_some() {
                     self.do_paint_webgpu()
@@ -2666,7 +2637,7 @@ impl TermWindow {
     }
 
     fn set_inner_size(&mut self, window: &Window, width: usize, height: usize) {
-        self.resizes_pending += 1;
+        self.resize_state.resizes_pending += 1;
         window.set_inner_size(width, height);
     }
 
@@ -3140,9 +3111,9 @@ impl TermWindow {
     pub fn config_was_reloaded(&mut self) {
         // Skip config reload during live resizing to avoid performance issues
         // when dragging the window. The reload will be processed after resize completes.
-        if self.live_resizing {
+        if self.resize_state.live_resizing {
             log::trace!("Skipping config reload during live resizing");
-            self.pending_config_reload_after_resize = true;
+            self.resize_state.pending_config_reload_after_resize = true;
             return;
         }
 
@@ -3150,8 +3121,8 @@ impl TermWindow {
     }
 
     fn config_was_reloaded_silently(&mut self) {
-        if self.live_resizing {
-            self.pending_config_reload_after_resize = true;
+        if self.resize_state.live_resizing {
+            self.resize_state.pending_config_reload_after_resize = true;
             return;
         }
         self.config_was_reloaded_impl();
@@ -3400,9 +3371,15 @@ impl TermWindow {
     }
 
     fn update_scrollbar_hovering(&mut self, pane: &Arc<dyn Pane>, context: &dyn WindowOps) {
-        let hovering = self.current_mouse_event.as_ref().is_some_and(|event| {
-            matches!(self.current_mouse_capture, None | Some(MouseCapture::UI))
-                && self.scrollbar_track_for_pane(pane).is_some_and(|track| {
+        let hovering = self
+            .mouse
+            .current_mouse_event
+            .as_ref()
+            .is_some_and(|event| {
+                matches!(
+                    self.mouse.current_mouse_capture,
+                    None | Some(MouseCapture::UI)
+                ) && self.scrollbar_track_for_pane(pane).is_some_and(|track| {
                     scrollbar_hover_hit(
                         track.x,
                         track.top,
@@ -3412,7 +3389,7 @@ impl TermWindow {
                         event.coords.y,
                     )
                 })
-        });
+            });
 
         if hovering != self.scrollbar.hovering {
             self.scrollbar.hovering = hovering;
@@ -3462,7 +3439,7 @@ impl TermWindow {
         let is_scrolled = self.effective_viewport(pane).is_some();
         let is_dragging = self.scrollbar_is_dragging();
         let is_hovering = matches!(
-            &self.current_mouse_event,
+            &self.mouse.current_mouse_event,
             Some(event)
                 if scrollbar_hover_hit(
                     track_x,
@@ -3471,7 +3448,7 @@ impl TermWindow {
                     track_height,
                     event.coords.x,
                     event.coords.y,
-                ) && matches!(self.current_mouse_capture, None | Some(MouseCapture::UI))
+                ) && matches!(self.mouse.current_mouse_capture, None | Some(MouseCapture::UI))
         );
         let is_light = is_light_color(&pane.palette().background);
         let mut alpha: f32 = if is_scrolled {
@@ -3645,7 +3622,7 @@ impl TermWindow {
 
         let tab_bar_height = self.tab_bar_pixel_height().unwrap_or(0.);
 
-        let hovering_in_tab_bar = match &self.current_mouse_event {
+        let hovering_in_tab_bar = match &self.mouse.current_mouse_event {
             Some(event) => {
                 let mouse_y = event.coords.y as f32;
                 mouse_y >= tab_bar_y as f32 && mouse_y < tab_bar_y as f32 + tab_bar_height
@@ -3656,7 +3633,7 @@ impl TermWindow {
         let new_tab_bar = TabBarState::new(
             self.dimensions.pixel_width / self.render_metrics.cell_size.width as usize,
             if hovering_in_tab_bar {
-                Some(self.last_mouse_coords.0)
+                Some(self.mouse.last_mouse_coords.0)
             } else {
                 None
             },
@@ -4457,7 +4434,7 @@ impl TermWindow {
     }
 
     fn scroll_by_current_event_wheel_delta(&mut self, pane: &Arc<dyn Pane>) -> anyhow::Result<()> {
-        if let Some(event) = &self.current_mouse_event {
+        if let Some(event) = &self.mouse.current_mouse_event {
             let amount = match event.kind {
                 MouseEventKind::VertWheel(amount) => -amount,
                 _ => return Ok(()),
@@ -4836,7 +4813,7 @@ impl TermWindow {
                 self.clear_selection(pane);
             }
             StartWindowDrag => {
-                self.window_drag.position = self.current_mouse_event.clone();
+                self.window_drag.position = self.mouse.current_mouse_event.clone();
                 self.window_drag.is_window_dragging = self.window_drag.position.is_some();
             }
             OpenLinkAtMouseCursor => {
@@ -6074,8 +6051,8 @@ impl TermWindow {
         let viewport = state.viewport;
         let was_primary_peek = state.was_primary_peek;
         let pin_pruned_viewport = Self::selection_drag_controls_pane(
-            self.selection_drag_active,
-            self.current_mouse_capture.as_ref(),
+            self.mouse.selection_drag_active,
+            self.mouse.current_mouse_capture.as_ref(),
             pane_id,
         );
         let next_viewport = Self::reconcile_viewport(

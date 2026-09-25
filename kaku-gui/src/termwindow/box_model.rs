@@ -858,18 +858,20 @@ impl super::TermWindow {
 
         let colors = match &element.hover_colors {
             Some(hc) => {
-                let hovering =
-                    match &self.current_mouse_event {
-                        Some(event) => {
-                            let mouse_x = event.coords.x as f32;
-                            let mouse_y = event.coords.y as f32;
-                            mouse_x >= element.bounds.min_x()
-                                && mouse_x <= element.bounds.max_x()
-                                && mouse_y >= element.bounds.min_y()
-                                && mouse_y <= element.bounds.max_y()
-                        }
-                        None => false,
-                    } && matches!(self.current_mouse_capture, None | Some(MouseCapture::UI));
+                let hovering = match &self.mouse.current_mouse_event {
+                    Some(event) => {
+                        let mouse_x = event.coords.x as f32;
+                        let mouse_y = event.coords.y as f32;
+                        mouse_x >= element.bounds.min_x()
+                            && mouse_x <= element.bounds.max_x()
+                            && mouse_y >= element.bounds.min_y()
+                            && mouse_y <= element.bounds.max_y()
+                    }
+                    None => false,
+                } && matches!(
+                    self.mouse.current_mouse_capture,
+                    None | Some(MouseCapture::UI)
+                );
                 if hovering {
                     hc
                 } else {

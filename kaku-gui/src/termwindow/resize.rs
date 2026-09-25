@@ -2,7 +2,7 @@ use crate::resize_increment_calculator::ResizeIncrementCalculator;
 use ::window::{Dimensions, ResizeIncrement, Window, WindowOps, WindowState};
 use config::{Config, ConfigHandle, DimensionContext};
 use mux::Mux;
-use std::collections::HashMap;
+use std::collections::{HashMap, LinkedList};
 use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -107,6 +107,22 @@ fn schedule_deferred_font_scale_pty_resize_epoch(window: &Window, epoch: u64) {
 pub enum ScaleChange {
     Absolute(f64),
     Relative(f64),
+}
+
+/// Per-window resize lifecycle: in-flight `set_inner_size` requests and the
+/// work deferred until they (or a live resize) complete. Bundled to keep the
+/// `TermWindow` field list shorter.
+#[derive(Default)]
+pub(crate) struct ResizeLifecycleState {
+    pub resizes_pending: usize,
+    pub is_repaint_pending: bool,
+    pub pending_scale_changes: LinkedList<ScaleChange>,
+    /// Tracks whether we are currently in a live resize operation
+    pub live_resizing: bool,
+    pub pending_screen_change_resize: bool,
+    pub pending_pty_flush_after_resize: bool,
+    pub pending_config_reload_after_resize: bool,
+    pub deferred_layout_relayout_epoch: usize,
 }
 
 fn should_normalize_fullscreen_state_on_resize(
@@ -227,12 +243,12 @@ impl super::TermWindow {
         }
         let mut normalized_window_state = window_state;
         if live_resizing
-            && self.pending_screen_change_resize
+            && self.resize_state.pending_screen_change_resize
             && dimensions.dpi == self.dimensions.dpi
         {
             // The user dragged back onto the original screen before the live resize
             // ended, so the deferred DPI transition is no longer relevant.
-            self.pending_screen_change_resize = false;
+            self.resize_state.pending_screen_change_resize = false;
         }
         let dimensions_unchanged = dimensions == self.dimensions;
         let was_fullscreen = self.window_state.contains(WindowState::FULL_SCREEN);
@@ -257,13 +273,13 @@ impl super::TermWindow {
         if dimensions_unchanged && self.window_state == normalized_window_state {
             // Even if the geometry didn't change, live resize state transitions
             // still matter for flushing deferred work.
-            let was_live_resizing = self.live_resizing;
-            self.live_resizing = live_resizing;
+            let was_live_resizing = self.resize_state.live_resizing;
+            self.resize_state.live_resizing = live_resizing;
 
             if was_live_resizing && !live_resizing {
                 self.flush_pending_pty_resize();
-                if self.pending_config_reload_after_resize {
-                    self.pending_config_reload_after_resize = false;
+                if self.resize_state.pending_config_reload_after_resize {
+                    self.resize_state.pending_config_reload_after_resize = false;
                     self.schedule_silent_config_reload(window);
                 }
                 self.emit_window_event("window-resized", None);
@@ -274,7 +290,7 @@ impl super::TermWindow {
         }
         let last_state = self.window_state;
         self.window_state = normalized_window_state;
-        self.live_resizing = live_resizing;
+        self.resize_state.live_resizing = live_resizing;
         self.quad_generation += 1;
         // Refresh per-screen OS parameters (eg: safe-area/border metrics)
         // on each resize so dragging between monitors doesn't use stale values.
@@ -292,7 +308,7 @@ impl super::TermWindow {
         if should_defer_screen_change_scale_update(
             live_resizing,
             screen_changed,
-            self.pending_screen_change_resize,
+            self.resize_state.pending_screen_change_resize,
             self.dimensions.dpi,
             dimensions.dpi,
         ) {
@@ -302,7 +318,7 @@ impl super::TermWindow {
                 dimensions.dpi,
                 dimensions,
             );
-            self.pending_screen_change_resize = true;
+            self.resize_state.pending_screen_change_resize = true;
 
             let mut stabilized = dimensions;
             stabilized.dpi = self.dimensions.dpi;
@@ -313,7 +329,7 @@ impl super::TermWindow {
                 false,
             );
         } else if !live_resizing
-            && self.pending_screen_change_resize
+            && self.resize_state.pending_screen_change_resize
             && dimensions.dpi != self.dimensions.dpi
         {
             log::trace!(
@@ -322,7 +338,7 @@ impl super::TermWindow {
                 dimensions.dpi,
                 dimensions,
             );
-            self.pending_screen_change_resize = false;
+            self.resize_state.pending_screen_change_resize = false;
             self.scaling_changed(dimensions, self.fonts.get_font_scale(), window, false);
 
         // Align fullscreen transition handling with maximize/restore behavior:
@@ -359,8 +375,8 @@ impl super::TermWindow {
         }
         if !live_resizing {
             self.flush_pending_pty_resize();
-            if self.pending_config_reload_after_resize {
-                self.pending_config_reload_after_resize = false;
+            if self.resize_state.pending_config_reload_after_resize {
+                self.resize_state.pending_config_reload_after_resize = false;
                 self.schedule_silent_config_reload(window);
             }
             self.emit_window_event("window-resized", None);
@@ -383,10 +399,10 @@ impl super::TermWindow {
     }
 
     fn flush_pending_pty_resize(&mut self) {
-        if !self.pending_pty_flush_after_resize {
+        if !self.resize_state.pending_pty_flush_after_resize {
             return;
         }
-        self.pending_pty_flush_after_resize = false;
+        self.resize_state.pending_pty_flush_after_resize = false;
         self.flush_all_pane_pty_sizes();
     }
 
@@ -421,8 +437,8 @@ impl super::TermWindow {
     }
 
     pub fn apply_pending_scale_changes(&mut self) {
-        while self.resizes_pending == 0 {
-            match self.pending_scale_changes.pop_front() {
+        while self.resize_state.resizes_pending == 0 {
+            match self.resize_state.pending_scale_changes.pop_front() {
                 Some(ScaleChange::Relative(change)) => {
                     if let Some(window) = self.window.as_ref().map(|w| w.clone()) {
                         self.adjust_font_scale(self.fonts.get_font_scale() * change, &window);
@@ -727,7 +743,7 @@ impl super::TermWindow {
 
         self.terminal_size = size;
 
-        let live = self.live_resizing;
+        let live = self.resize_state.live_resizing;
         let defer_font_scale_pty_resize =
             !live && has_deferred_font_scale_pty_resize(self.mux_window_id);
         let mux = Mux::get();
@@ -748,7 +764,7 @@ impl super::TermWindow {
             }
         };
         if live {
-            self.pending_pty_flush_after_resize = true;
+            self.resize_state.pending_pty_flush_after_resize = true;
         }
         if defer_font_scale_pty_resize {
             self.schedule_deferred_font_scale_pty_resize(window);
@@ -932,19 +948,22 @@ impl super::TermWindow {
     }
 
     pub fn decrease_font_size(&mut self) {
-        self.pending_scale_changes
+        self.resize_state
+            .pending_scale_changes
             .push_back(ScaleChange::Relative(1.0 / 1.1));
         self.apply_pending_scale_changes();
     }
 
     pub fn increase_font_size(&mut self) {
-        self.pending_scale_changes
+        self.resize_state
+            .pending_scale_changes
             .push_back(ScaleChange::Relative(1.1));
         self.apply_pending_scale_changes();
     }
 
     pub fn reset_font_size(&mut self) {
-        self.pending_scale_changes
+        self.resize_state
+            .pending_scale_changes
             .push_back(ScaleChange::Absolute(1.0));
         self.apply_pending_scale_changes();
     }
