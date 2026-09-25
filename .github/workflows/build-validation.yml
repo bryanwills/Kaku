@@ -1,11 +1,12 @@
 name: Build Validation
 
-# Release-shaped build validation: universal (arm64 + x86_64) release builds
-# and app bundle assembly. These take ~25 minutes combined and almost never
-# break from routine Rust changes, so they do not gate every push. They run:
+# Release-shaped build validation: universal (arm64 + x86_64) builds with the
+# release-opt profile that releases and nightlies ship, plus app bundle
+# assembly. They almost never break from routine Rust changes, so they do not
+# gate every push. They run:
 #   - on pushes that touch the build pipeline itself (scripts, dependency
 #     graph, bundle assets),
-#   - once a day as a backstop,
+#   - once a day as a backstop, skipped when that commit already passed,
 #   - on demand (scripts/release.sh preflight checks the latest run is green
 #     before starting a release; dispatch manually if it is stale).
 on:
@@ -32,9 +33,53 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  universal-build:
-    name: Universal Build Validation
+  # The daily backstop has nothing new to learn from a commit that already
+  # built green; the run still concludes success, which release.sh accepts.
+  gate:
+    name: Skip Already Validated Commit
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+    steps:
+      - name: Decide
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build=true
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            passed=$(gh run list --repo "${{ github.repository }}" \
+              --workflow build-validation.yml --commit "${{ github.sha }}" \
+              --status success --limit 1 --json databaseId --jq 'length')
+            if [[ "$passed" != "0" ]]; then
+              build=false
+              echo "${{ github.sha }} already passed Build Validation; skipping."
+            fi
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
+  # One job per architecture so the two fat-LTO builds run side by side.
+  # The arm64 leg also assembles the app bundle from the binaries it just
+  # built, instead of a separate job compiling arm64 a second time.
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: gate
+    if: needs.gate.outputs.build == 'true'
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-apple-darwin
+            bundle: true
+          - arch: x86_64
+            target: x86_64-apple-darwin
+            bundle: false
+    env:
+      PROFILE: release-opt
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -43,56 +88,59 @@ jobs:
         uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
         with:
           toolchain: 1.95.0
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: ${{ matrix.target }}
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
-      - name: Build both targets
-        run: |
-          set -o pipefail
-          cargo build --locked --release --target aarch64-apple-darwin -p kaku -p kaku-gui 2>&1 | sed '/has no symbols/d'
-          cargo build --locked --release --target x86_64-apple-darwin -p kaku -p kaku-gui 2>&1 | sed '/has no symbols/d'
-
-      - name: Lipo merge and verify
-        run: |
-          mkdir -p target/universal/release
-          lipo -create -output target/universal/release/kaku \
-            target/aarch64-apple-darwin/release/kaku \
-            target/x86_64-apple-darwin/release/kaku
-          lipo -create -output target/universal/release/kaku-gui \
-            target/aarch64-apple-darwin/release/kaku-gui \
-            target/x86_64-apple-darwin/release/kaku-gui
-
-          lipo target/universal/release/kaku -verify_arch arm64 x86_64
-          lipo target/universal/release/kaku-gui -verify_arch arm64 x86_64
-
-          lipo -info target/universal/release/kaku
-          lipo -info target/universal/release/kaku-gui
-
-  app-bundle:
-    name: App Bundle Validation
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
         with:
-          toolchain: 1.95.0
+          key: ${{ matrix.target }}
 
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
-      - name: Build debug app bundle
+      - name: Build binaries
         run: |
           set -o pipefail
-          ./scripts/build.sh --native-arch --app-only 2>&1 | sed '/has no symbols/d'
+          cargo build --locked --profile "$PROFILE" --target ${{ matrix.target }} -p kaku -p kaku-gui 2>&1 | sed '/has no symbols/d'
+
+      - name: Assemble app bundle
+        if: matrix.bundle
+        run: |
+          set -o pipefail
+          BUILD_ARCH=${{ matrix.arch }} ./scripts/build.sh --app-only 2>&1 | sed '/has no symbols/d'
 
       - name: Verify bundled shell plugins are pinned
+        if: matrix.bundle
         run: |
           test -d dist/Kaku.app
           test "$(cat dist/Kaku.app/Contents/Resources/vendor/zsh-autosuggestions/.kaku-vendor-ref)" = "85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5"
           test "$(cat dist/Kaku.app/Contents/Resources/vendor/fast-syntax-highlighting/.kaku-vendor-ref)" = "3d574ccf48804b10dca52625df13da5edae7f553"
           test "$(cat dist/Kaku.app/Contents/Resources/vendor/zsh-completions/.kaku-vendor-ref)" = "84615f3d0b0e943d5b1de862c9552e572c8e70bb"
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bin-${{ matrix.arch }}
+          path: |
+            target/${{ matrix.target }}/release-opt/kaku
+            target/${{ matrix.target }}/release-opt/kaku-gui
+            target/${{ matrix.target }}/release-opt/k
+          if-no-files-found: error
+          retention-days: 1
+
+  universal:
+    name: Universal Merge
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: bin-*
+
+      - name: Lipo merge and verify
+        run: |
+          set -euo pipefail
+          mkdir -p universal
+          for bin in kaku kaku-gui k; do
+            lipo -create -output "universal/$bin" "bin-arm64/$bin" "bin-x86_64/$bin"
+            lipo "universal/$bin" -verify_arch arm64 x86_64
+            lipo -info "universal/$bin"
+          done

@@ -154,6 +154,41 @@ check_build_validation() {
     esac
 }
 
+# cargo audit runs weekly and on dependency changes, not on every push, so a
+# RustSec advisory can sit red on main without blocking anything else.
+check_security_audit() {
+    log_info "Checking latest Security Audit workflow run..."
+
+    local line
+    line=$(gh run list \
+        --workflow 'Security Audit' \
+        --branch main \
+        --limit 1 \
+        --json conclusion,url \
+        --jq '.[0] | "\(.conclusion)|\(.url)"' 2>/dev/null || true)
+
+    local conclusion="${line%%|*}"
+    local url="${line##*|}"
+    if [[ "$conclusion" == "failure" ]]; then
+        die "Latest Security Audit run failed ($url). Update the flagged crates or rerun it before releasing."
+    fi
+    log_info "Security Audit: ${conclusion:-no run found}"
+}
+
+# CI Checks already ran fmt, clippy and the full test suite on this exact
+# commit when it is green; check_clean_git guarantees HEAD is what CI saw.
+checks_passed_in_ci() {
+    local head conclusion
+    head=$(git rev-parse HEAD)
+    conclusion=$(gh run list \
+        --workflow 'Checks' \
+        --commit "$head" \
+        --limit 1 \
+        --json conclusion \
+        --jq '.[0].conclusion' 2>/dev/null || true)
+    [[ "$conclusion" == "success" ]]
+}
+
 extract_release_title() {
     local release_notes_file="$REPO_ROOT/.github/RELEASE_NOTES.md"
     local title
@@ -270,17 +305,26 @@ check_notarization_creds() {
 
 # Run all quality checks
 run_checks() {
-    log_info "Running format check..."
-    make fmt-check
+    local ci_green=0
+    if checks_passed_in_ci; then
+        ci_green=1
+        log_info "CI Checks passed on $(git rev-parse --short HEAD); skipping local fmt, check and tests."
+    else
+        log_info "Running format check..."
+        make fmt-check
 
-    log_info "Running compilation check..."
-    make check
+        log_info "Running compilation check..."
+        make check
+    fi
 
     if [[ "$RUN_CLIPPY" == "1" ]]; then
         log_info "Running clippy..."
         cargo clippy --locked --all-targets -- -D warnings
     fi
 
+    if [[ "$ci_green" == "1" ]]; then
+        return 0
+    fi
     if [[ "$SKIP_TESTS" == "0" ]]; then
         log_info "Running tests..."
         make test
@@ -548,6 +592,7 @@ main() {
         check_release_notes
         check_release_config
         check_build_validation
+        check_security_audit
         validate_release_profile
         detect_signing_identity
         check_notarization_creds

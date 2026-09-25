@@ -212,10 +212,14 @@ fi
 
 ensure_rust_targets "${BUILD_TARGETS[@]}"
 
+# One cargo invocation for every target, so one architecture keeps compiling
+# while the other sits in its single-threaded fat-LTO link.
+CARGO_TARGET_ARGS=()
 for target in "${BUILD_TARGETS[@]}"; do
-	echo "Building target: $target"
-	CARGO_TERM_PROGRESS_WHEN=auto cargo build --locked ${CARGO_PROFILE_ARGS[@]+"${CARGO_PROFILE_ARGS[@]}"} ${CARGO_FEATURE_ARGS[@]+"${CARGO_FEATURE_ARGS[@]}"} --target "$target" --target-dir "$TARGET_DIR" -p kaku-gui -p kaku
+	CARGO_TARGET_ARGS+=(--target "$target")
 done
+echo "Building targets: ${BUILD_TARGETS[*]}"
+CARGO_TERM_PROGRESS_WHEN=auto cargo build --locked ${CARGO_PROFILE_ARGS[@]+"${CARGO_PROFILE_ARGS[@]}"} ${CARGO_FEATURE_ARGS[@]+"${CARGO_FEATURE_ARGS[@]}"} "${CARGO_TARGET_ARGS[@]}" --target-dir "$TARGET_DIR" -p kaku-gui -p kaku
 
 if [[ "$BUILD_ARCH" == "universal" ]]; then
 	BIN_DIR="$TARGET_DIR/universal/$PROFILE_DIR"

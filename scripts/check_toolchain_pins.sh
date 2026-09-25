@@ -8,7 +8,7 @@
 # cargo runs under the toolchain-file version that has neither. The failures read
 # as unrelated ("cargo-clippy is not installed", "can't find crate for `core`"),
 # and only the jobs needing an extra component or target go red, so the break
-# hides behind passing Cargo Check and Unit Tests.
+# hides behind passing Unit Tests.
 #
 # Exit non-zero when any workflow pin disagrees with rust-toolchain.toml.
 #
