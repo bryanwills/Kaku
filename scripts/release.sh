@@ -169,10 +169,21 @@ check_security_audit() {
 
     local conclusion="${line%%|*}"
     local url="${line##*|}"
-    if [[ "$conclusion" == "failure" ]]; then
-        die "Latest Security Audit run failed ($url). Update the flagged crates or rerun it before releasing."
-    fi
-    log_info "Security Audit: ${conclusion:-no run found}"
+    case "$conclusion" in
+        failure)
+            die "Latest Security Audit run failed ($url). Update the flagged crates or rerun it before releasing."
+            ;;
+        "" | null)
+            if [[ -n "$url" && "$url" != null ]]; then
+                log_warn "Security Audit run still in progress: $url"
+            else
+                log_warn "No Security Audit run found on main."
+            fi
+            ;;
+        *)
+            log_info "Security Audit: $conclusion ($url)"
+            ;;
+    esac
 }
 
 # CI Checks already ran fmt, clippy and the full test suite on this exact
