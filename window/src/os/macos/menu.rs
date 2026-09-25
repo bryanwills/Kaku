@@ -78,13 +78,6 @@ impl Menu {
         }
     }
 
-    pub fn assign_as_windows_menu(&self) {
-        unsafe {
-            let ns_app = NSApp();
-            ns_app.setWindowsMenu_(*self.menu);
-        }
-    }
-
     pub fn assign_as_services_menu(&self) {
         unsafe {
             let ns_app = NSApp();

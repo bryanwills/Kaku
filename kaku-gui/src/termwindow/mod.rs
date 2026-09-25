@@ -4236,10 +4236,12 @@ impl TermWindow {
             }
         };
 
-        let domain_id_of_current_pane = tab
-            .get_active_pane()
-            .expect("tab has no panes!")
-            .domain_id();
+        // Release builds abort on panic, so a tab caught mid-teardown must not
+        // take every window down with it.
+        let Some(domain_id_of_current_pane) = tab.get_active_pane().map(|pane| pane.domain_id())
+        else {
+            return;
+        };
         let pane_id = pane.pane_id();
         let tab_id = tab.tab_id();
         let title = args.title.unwrap();

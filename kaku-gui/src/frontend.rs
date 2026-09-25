@@ -1420,6 +1420,41 @@ mod tests {
     use std::path::Path;
 
     #[test]
+    fn initial_menubar_is_built_synchronously_without_appkit_windows_menu() {
+        // Production source only, so the assertions cannot match themselves.
+        let frontend = include_str!("frontend.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("frontend production source");
+        let try_new = frontend
+            .split("pub fn try_new() -> anyhow::Result<Rc<GuiFrontEnd>> {")
+            .nth(1)
+            .and_then(|body| body.split("        Ok(front_end)\n").next())
+            .expect("try_new body");
+        // Function-body indentation: a call moved into a spawned closure or a
+        // deferred block would be indented deeper and lose early key events.
+        assert!(
+            try_new.contains(
+                "\n        crate::commands::CommandDef::recreate_menubar(&config::configuration());\n"
+            ),
+            "the initial menubar must be built synchronously in try_new"
+        );
+
+        // AppKit must never own the Windows menu (dangling
+        // NSWindowRepresentingMenuItem, PAC faults on macOS 26).
+        for (name, source) in [
+            ("commands.rs", include_str!("commands.rs")),
+            ("menu.rs", include_str!("../../window/src/os/macos/menu.rs")),
+        ] {
+            assert!(
+                !source.contains("setWindowsMenu_(") && !source.contains(", setWindowsMenu:"),
+                "{} must not hand the Windows menu to AppKit",
+                name
+            );
+        }
+    }
+
+    #[test]
     fn settings_command_preserves_custom_config_path() {
         assert_eq!(
             kaku_config_command("kaku".into(), Some(Path::new("/tmp/custom config.lua"))),
