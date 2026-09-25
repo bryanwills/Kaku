@@ -134,13 +134,3 @@ Sibling sweep: [pattern signature] -> [N checked, M defective, K n/a]
 ```
 
 Say whether anything was fixed or whether this was scan-only.
-
-## Relation to other skills
-
-| Skill | When |
-|---|---|
-| `bugs` (this) | No symptom yet; proactive sweep or post-fix sibling hunt |
-| hunt / debug | User already has a broken behavior |
-| check / review | Diff or PR quality |
-| maintainer-sweep | Live GitHub issues/PRs, public replies, close after CI |
-| release | Pre-tag smoke; runtime checklist that CI cannot see |
