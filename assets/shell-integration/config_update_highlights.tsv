@@ -86,3 +86,5 @@
 34	TUI 或 SSH 会话异常退出后，回到提示符时恢复正常鼠标输入
 34	Kaku prompt and Smart Tab remain available inside tmux, and fish grep completion expands correctly
 34	tmux 中保留 Kaku 提示符和智能补全，fish 的 grep 补全正常展开
+35	Sessions are saved while Kaku runs, so a crash or force quit still restores your windows
+35	Kaku 运行时会定期保存会话，崩溃或强制退出后也能恢复窗口

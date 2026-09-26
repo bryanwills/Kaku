@@ -34,5 +34,6 @@ instruction files; read the txt file instead.
 | v32 | V0.18.0 | No schema change, and no bundled-integration change either; increments only because the release gate requires a bump every release. The release highlights reuse the new Move Tab to New Window command and the multi-display menu bar clamp fix. |
 | v33 | V0.19.0 | No schema change. Bumps so existing installs pick up two bundled fixes: light-theme selected rows keep a visibly blue background instead of washing out to near-white, and the lazygit launcher resolves its working directory from the shell that actually receives the input, so it also works inside nested shells. |
 | v34 | V0.20.0 | No schema change. Regenerates shell integrations to reset mouse reporting at the prompt after abnormal TUI or SSH exits, preserve the Kaku prompt and Smart Tab in tmux, and correct fish grep completion expansion. |
+| v35 | V0.21.0 | No schema change. The config generated on first launch now sets `color_scheme = 'Kaku Dark'`; existing configs keep the bundled default that follows macOS appearance, so no migration is needed. Also increments because the release gate requires a bump every release. |
 
 When you bump the version, add a row here in the same change.
