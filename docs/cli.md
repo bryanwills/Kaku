@@ -27,8 +27,8 @@ memory files as the `Cmd + L` overlay, and supports `/new`, `/resume`, `/clear`,
 ## kaku config
 
 Open the Kaku configuration TUI for common settings and Lua overrides. It
-ensures `~/.config/kaku/kaku.lua` exists and is also accessible from the
-settings panel with `Cmd + ,`.
+creates `~/.config/kaku/kaku.lua` if it is missing. Inside Kaku, `Cmd + ,`
+opens the same screen.
 
 ```bash
 kaku config
@@ -36,7 +36,7 @@ kaku config
 
 ## kaku doctor
 
-Run diagnostics and verify that Kaku's shell integration, PATH entries, and optional tool installations are healthy. Use this first if something feels broken.
+Check the Kaku app bundle, PATH entries, and zsh or fish shell integration. Use this first if something feels broken.
 
 ```bash
 kaku doctor

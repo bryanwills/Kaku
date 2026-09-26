@@ -125,13 +125,11 @@ Note: Kaku's theme-aware font weight system only applies to the default JetBrain
 
 ## My `window_padding` change isn't working.
 
-`window_padding` values require a `'px'` unit suffix:
+`window_padding` takes a number or a string with a unit. Plain numbers are pixels, so `24` and `'24px'` mean the same thing, and the other units are `'pt'`, `'%'`, and `'cell'`:
 
 ```lua
 config.window_padding = { left = '24px', right = '24px', top = '40px', bottom = '20px' }
 ```
-
-Plain numbers (without `'px'`) are interpreted as terminal cell units, which may not match your intent.
 
 ## The screen jumps to the top while Claude Code is generating output.
 
@@ -178,16 +176,12 @@ brew install --cask kaku
 
 Kaku's notification permission may not be granted. Go to System Settings > Notifications > Kaku and enable Allow Notifications. Then restart Kaku.
 
-## The global hotkey doesn't work on non-QWERTY keyboards (e.g. Colemak).
+## How do I change the global hotkey?
 
-`Cmd + Opt + Ctrl + K` uses the physical QWERTY K position. On Colemak, this corresponds to a different key. Remap it in your config:
+`Cmd + Opt + Ctrl + K` shows or hides Kaku from any app. It follows your current keyboard layout, so on Colemak or Dvorak it is whichever key types K. To pick another combination, change Global Hotkey in `kaku config`, or set it in Lua:
 
 ```lua
-table.insert(config.keys, {
-  key = 'k',  -- adjust to your layout's physical key
-  mods = 'CMD|OPT|CTRL',
-  action = wezterm.action.EmitEvent('toggle-global-window'),
-})
+config.macos_global_hotkey = { key = 'j', mods = 'CMD|OPT|CTRL' }
 ```
 
 ## QR codes and terminal graphics look vertically stretched.

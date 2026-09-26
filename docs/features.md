@@ -148,7 +148,7 @@ tell application "Kaku"
 end tell
 ```
 
-Open `/Applications/Kaku.app` in Script Editor → File → Open Dictionary to browse the full dictionary. There is no `do script` verb — Kaku does not expose shell execution to AppleScript.
+To browse the full dictionary, choose File > Open Dictionary in Script Editor and pick `/Applications/Kaku.app`. There is no `do script` verb, so AppleScript cannot run shell commands through Kaku.
 
 ---
 
@@ -225,13 +225,9 @@ config.smart_tab_mode = "off"                -- disable Smart Tab
 If you prefer environment variables (for example, because you share your zshrc across terminals), add one of these before sourcing the Kaku shell integration:
 
 ```zsh
-export KAKU_TAB_ACCEPT_SUGGEST_FIRST=1  # suggestion-first mode
+export KAKU_TAB_ACCEPT_SUGGEST_FIRST=0  # completion-first (suggestion-first is the default)
 # or
 export KAKU_SMART_TAB_DISABLE=1         # disable Smart Tab
 ```
 
-```fish
-set -gx KAKU_SMART_TAB_DISABLE 1
-```
-
-Environment variables set in your shell rc take precedence over `kaku.lua` settings. Smart Tab is only active inside Kaku sessions (`TERM_PROGRAM=Kaku`).
+Environment variables set in your shell rc take precedence over `kaku.lua` settings. Smart Tab is zsh only and runs inside Kaku sessions (`TERM_PROGRAM=Kaku`, or tmux started from a Kaku shell).
