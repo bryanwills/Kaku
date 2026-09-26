@@ -751,9 +751,9 @@ else
   wezterm.log_error('Kaku: bundled defaults not found')
 end
 
--- Kaku follows macOS appearance by default. Uncomment one line to force a theme:
--- config.color_scheme = 'Kaku Dark'
--- config.color_scheme = 'Kaku Light'
+-- New installs start in Kaku Dark. Pick another theme in Settings, or change this line:
+-- 'Kaku Light', or 'Auto' to follow macOS appearance.
+config.color_scheme = 'Kaku Dark'
 
 -- User overrides:
 -- Kaku intentionally keeps WezTerm-compatible Lua API names
@@ -1043,21 +1043,19 @@ mod tests {
     }
 
     #[test]
-    fn minimal_user_config_keeps_theme_auto_by_default() {
+    fn minimal_user_config_starts_new_installs_in_dark() {
         let content = minimal_user_config_template();
 
+        // Only a freshly generated config pins Kaku Dark. Existing installs
+        // already have a user config without this line, so they keep the
+        // bundled default that follows macOS appearance.
         assert!(
-            content.contains("Kaku follows macOS appearance by default"),
-            "generated user config should explain the default theme behavior"
+            content.contains("\nconfig.color_scheme = 'Kaku Dark'\n"),
+            "generated user config should start new installs in Kaku Dark"
         );
         assert!(
-            !content.contains("\nconfig.color_scheme = 'Kaku Dark'\n"),
-            "generated user config must not pin first-run users to dark mode"
-        );
-        assert!(
-            content.contains("-- config.color_scheme = 'Kaku Dark'")
-                && content.contains("-- config.color_scheme = 'Kaku Light'"),
-            "generated user config should still show explicit theme examples"
+            content.contains("'Kaku Light'") && content.contains("'Auto'"),
+            "generated user config should name the other theme choices"
         );
     }
 

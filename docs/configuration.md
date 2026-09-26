@@ -43,9 +43,9 @@ Start with the generated file and keep overrides small. Add only the settings yo
 config.font_size = 16
 config.window_background_opacity = 0.95
 
--- Choose one only if you do not want to follow macOS appearance:
--- config.color_scheme = "Kaku Dark"
+-- New installs start with config.color_scheme = "Kaku Dark". Change it to:
 -- config.color_scheme = "Kaku Light"
+-- config.color_scheme = "Auto"  -- follow macOS appearance
 ```
 
 Keep terminal behavior, appearance, key bindings, launch behavior, and other WezTerm-compatible settings in `kaku.lua`.
@@ -58,10 +58,11 @@ Manage Kaku Assistant settings with `kaku ai`. That command writes `~/.config/ka
 
 **Theme**
 
-Kaku follows macOS appearance by default and switches between Kaku Dark and
-Kaku Light automatically. To return to this behavior, choose **Auto** in
-`kaku config` or remove an explicit `config.color_scheme` override. To force
-one theme:
+New installs start in Kaku Dark, because the generated `kaku.lua` sets
+`config.color_scheme = "Kaku Dark"`. Installs whose config has no
+`color_scheme` line keep following macOS appearance, switching between Kaku
+Dark and Kaku Light automatically. To follow macOS appearance, choose **Auto**
+in `kaku config` or remove the `config.color_scheme` line. To force one theme:
 
 ```lua
 config.color_scheme = "Kaku Dark"   -- always dark
