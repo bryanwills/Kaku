@@ -4265,7 +4265,7 @@ config.color_schemes['Kaku Light'] = {
     '#8E6B02', -- yellow-700 (matches ansi yellow, contrast ~5.1:1)
     '#3171B2', -- blue-500
     '#B74583', -- magenta-500
-    '#2F968D', -- cyan-500
+    '#277C75', -- cyan-500 (deepened for light-theme contrast ~4.8:1)
     '#403E3C', -- base-800
   },
 
